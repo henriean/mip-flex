@@ -1,6 +1,8 @@
 using SolverPeeker
 using Test
+using JuMP
+using MathOptInterface
+const MOI = MathOptInterface
 
-@testset "SolverPeeker.jl" begin
-    # Write your tests here.
-end
+include("lprep.jl")
+#include("recognize.jl")

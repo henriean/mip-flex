@@ -1,0 +1,111 @@
+using SolverPeeker
+using Test
+using JuMP
+using MathOptInterface
+const MOI = MathOptInterface
+
+
+# Model with linear constraints and objective
+model1 = Model()
+@variable(model1, x >= 0, Int)
+@variable(model1, y <= 5)
+@variable(model1, 0 <= z <= 50)
+@objective(model1, Max, 3x+5y-2z)
+@constraint(model1, x+2y <= 45)
+@constraint(model1, z - y >= 4)
+@constraint(model1, 0 <= 2z <= 7)
+
+function fill_small_test_model!(model::JuMP.Model)
+    # The model does not need to make sense, just use many different features.
+    @variable(model, a[1:5] >= 0, Int)
+    @variable(model, b[6:10], Bin)
+    @variable(model, c[1:3] == 0)
+    @variable(model, 10 <= d[1:3] <= 20)
+    @constraint(model, con1, sum(a) + sum(b) <= 5)
+    @constraint(model, con2, sum(b) >= 3)
+    @constraint(model, con3, sum(d[1:2]) >= 5)
+    @constraint(model, con4, sum(d) <= (sum(c) + 10))
+    @objective(model, Max, sum(a) - sum(b) + sum(d))
+    return model
+end
+
+
+function convert_jump_model_to_lpmodel(model::JuMP.Model)
+    print("\n")
+    m = (model)
+    print("JuMP model:\n")
+    show(m)
+    print("\n------------------\n")
+    lpmodel = lprep(m)
+    print("LPModel:\n")
+    print("name:\n")
+    show(lpmodel.name)
+    print("\n")
+    print("\n")
+    print("sense:\n")
+    show(lpmodel.sense)
+    print("\n")
+    print("\n")
+    print("objective:\n")
+    show(lpmodel.objective)
+    print("\n")
+    print("\n")
+    print("num_variables_created:\n")
+    show(lpmodel.num_variables_created)
+    print("\n")
+    print("\n")
+    print("single_variable_mask:\n")
+    show(lpmodel.single_variable_mask)
+    print("\n")
+    print("\n")
+    print("lower_bound:\n")
+    show(lpmodel.lower_bound)
+    print("\n")
+    print("\n")
+    print("upper_bound:\n")
+    show(lpmodel.upper_bound)
+    print("\n")
+    print("\n")
+    print("var_to_name:\n")
+    show(lpmodel.var_to_name)
+    print("\n")
+    print("\n")
+    print("name_to_var:\n")
+    show(lpmodel.name_to_var)
+    print("\n")
+    print("\n")
+    print("nextconstraintid:\n")
+    show(lpmodel.nextconstraintid)
+    print("\n")
+    print("\n")
+    print("con_to_name:\n")
+    show(lpmodel.con_to_name)
+    print("\n")
+    print("\n")
+    print("name_to_con:\n")
+    show(lpmodel.name_to_con)
+    print("\n")
+    print("\n")
+    print("constrmap:\n")
+    show(lpmodel.constrmap)
+    print("\n")
+    show(lpmodel.scalaraffinefunction)
+    #print("\n")
+    #print("\n")
+    #show(lpmodel.scalaraffinefunction)
+    #print("\n")
+    #print("\n")
+    #show(lpmodel.vectorofvariables)
+    #print("\n")
+    #print("\n")
+    #show(lpmodel.vectoraffinefunction)
+    return 
+end
+
+@testset "lprep.jl" begin
+    convert_jump_model_to_lpmodel(model1)
+    #print("\n")
+    #convert_jump_model_to_lpmodel(fill_small_test_model!(Model()))
+
+
+end
