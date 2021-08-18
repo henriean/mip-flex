@@ -33,10 +33,14 @@ model_nl = Model()
 @testset "recognize" begin
 
 
+
+
+
+
     """
     Constant objective test
     """
-
+    """
     @test recognize(model1, ObjectiveIsConstant()) == false
     
     @test recognize(model2, ObjectiveIsConstant()) == true
@@ -45,73 +49,8 @@ model_nl = Model()
     @variable(model2, x)
     @objective(model2, Min, 5)
     @test recognize(model2, ObjectiveIsConstant()) == true
+    """
 
     
-    """
-    Linear Objective Test
-    """
-
-    """
-    @test recognize(model1, ObjectiveIsLinear()) == true
-    @test recognize(model2, ObjectiveIsLinear()) == true
-    #@test recognize(model_nl, ObjectiveIsLinear()) == false
-    """
-
-
-    """
-    Linear Constraints Test
-    """
-
-    """
-    @test recognize(model1, ConstraintsAreLinear()) == true
-    @test recognize(model2, ConstraintsAreLinear()) == true
-    #@test recognize(model_nl, ConstraintsAreLinear()) == false
-
-
    
-    list = list_of_constraint_types(model1)
-    #show(list)
-    show(list)
-    print("\n")
-    show(list <: Tuple{DataType<:Union{GenericAffExpr, VariableRef}, Any})
-    print("\n")
-    print("\n")
-    #print("\n")
-    #a_c = []
-    for (F, S) in list
-        #show(F)
-        #print("\n")
-        #show(S)
-        #print("\n")
-        #print("\n")
-        #a_c = append!(a_c, all_constraints(model1, F, S))
-        #show(a_c)
-        #print("\n")
-        #show(typeof(a_c))
-        #print("\n")
-        #print("\n")
-        #for cref in a_c
-            #show(typeof(cref))
-            #print("\n")
-            #print("\n")
-            #c_obj = constraint_object(cref)
-            #show(c_obj.set)
-            #c_obj.func
-            #if !(typeof(c_obj.func) <: Union{GenericAffExpr, VariableRef})
-            #    return false
-            # end
-        #end
-    end
-
-
-    #for cref in all_constraints(model, F, S)
-    #    c_obj = constraint_object(cref)
-        #c_obj.set
-    #    if !(typeof(c_obj.func) <: Union{GenericAffExpr, VariableRef})
-    #        return false
-    #    end
-    #end
-    """
-
-    
 end

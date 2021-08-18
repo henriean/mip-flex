@@ -8,7 +8,7 @@ in order to specify which features of the provided model to look into.
 
 """
 
-export ObjectiveIsConstant
+export ConstantObjective, DifferenceConstraints, AllIntegerVariables, AllIntegerConstraintBounds
 
 
 abstract type AbstractRecognizeAttribute end
@@ -16,7 +16,10 @@ abstract type AbstractRecognizeAttribute end
 
 # TODO: Describe each attribute
 
-struct ObjectiveIsConstant <: AbstractRecognizeAttribute end
+struct DifferenceConstraints <: AbstractRecognizeAttribute end
+struct AllIntegerVariables <: AbstractRecognizeAttribute end
+struct ConstantObjective <: AbstractRecognizeAttribute end
+struct AllIntegerConstraintBounds <: AbstractRecognizeAttribute end
 
 
 
@@ -28,20 +31,20 @@ in order to specify which ways to solve the model.
 
 """
 
+export ShortestPath
+
 abstract type AbstractSolveAttribute end
 
-struct ConstantObjective <:AbstractSolveAttribute end
+struct ShortestPath <: AbstractSolveAttribute end
 
 
-"""
-    AbstractPeekAttribute
-
-Abstract supertype for attribute objects that will be used in order to specify what to do with the model.
 
 """
+    AbstractOptimizeAttribute
 
-abstract type AbstractPeekAttribute end
+Abstract supertype for attribute objects that will be used in order to specify what to do when optimizing the model.
 
+"""
 
-# Run all tests for linar models, and solve if possible.
-struct AllLinear <:AbstractPeekAttribute end
+abstract type AbstractOptimizeAttribute end
+

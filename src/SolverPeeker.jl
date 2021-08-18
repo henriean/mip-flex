@@ -7,9 +7,10 @@ const MOIU = MOI.Utilities
 
 include("lprep.jl")
 include("attributes.jl")
+#include("peeker.jl")
 include("recognize.jl")
-include("peek.jl")
 include("solve.jl")
+include("optimize.jl")
 
 
 end
