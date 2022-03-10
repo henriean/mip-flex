@@ -99,31 +99,49 @@ LPRep will be a struct holding desired fields.
 
 
 # Finds matrix A and vector b representing the linear system of LessThan inequalities
-function get_constraint_matrices(lpmodel::LPModel)
+function get_constraint_matrices(lpmodel)
 
     # Constraint indices from regular constraints (only affine in less than allowed.)
     cis = MOI.get(lpmodel, MOI.ListOfConstraintIndices{MathOptInterface.ScalarAffineFunction{Float64},MathOptInterface.LessThan{Float64}}())
     
     # Initiate Matrix with constraints as rows and variables as columns.
     con_number = size(lpmodel.constrmap, 1)
-    var_number = lpmodel.num_variables_created
-    A = zeros(con_number, var_number)
-    #show(zeros(con_number, var_number))
+    #var_number = lpmodel.num_variables_created
+
+    # TODO: Gjør om til sparse her!!!!
+    #A = spzeros(con_number, var_number)
+    #show(spzeros(con_number, var_number))
     #show(Array{Float64, 2}(undef, con_number, var_number))
 
     # Initiate vector of less than constraints values
     b = zeros(con_number)
+
+    # rows index
+    R = []
+    # column index
+    C = []
+    # value
+    V=[]
    
     # For each row, find the value of each variable in the corresponding constraint.
     # Use var_to_name in order to know what index each variable has, if needed.
     for i in 1:con_number
         for term in MOI.get(lpmodel, MOI.ConstraintFunction(), cis[i]).terms
-            A[i, term.variable_index.value] = term.coefficient
+            append!(R, [i])
+            append!(C, [term.variable_index.value])
+            append!(V, [term.coefficient])
+            #A[i, term.variable_index.value] = term.coefficient
         end
         b[i] = MOI.get(lpmodel, MOI.ConstraintSet(), cis[i]).upper
     end
 
-    return (A, b)
+    # convert from type Array{Any,1} to Array{Float64,1}
+    V = convert(Array{Float64,1}, V)
+
+    A = sparse(R,C,V)
+    At = sparse(C,R,V)
+
+    return (A, b, At)
 
 end
 
@@ -131,7 +149,7 @@ end
 # If a variable has greater than constraints,
 # the lower bound will be saved in the index corresponding to its MOI index.
 # If it has no lower bound, the value will be NaN.
-function get_greater_than_variables(lpmodel::LPModel)
+function get_greater_than_variables(lpmodel)
     cis_g = MOI.get(lpmodel, MOI.ListOfConstraintIndices{MathOptInterface.SingleVariable,MathOptInterface.GreaterThan{Float64}}())
 
     greater_than = fill(NaN, lpmodel.num_variables_created)
@@ -146,7 +164,7 @@ end
 # If a variable has less than constraints,
 # the upper bound will be saved in the index corresponding to its MOI index.
 # If it has no upper bound, the value will be NaN.
-function get_less_than_variables(lpmodel::LPModel)
+function get_less_than_variables(lpmodel)
     cis_l = MOI.get(lpmodel, MOI.ListOfConstraintIndices{MathOptInterface.SingleVariable,MathOptInterface.LessThan{Float64}}())
 
     less_than = fill(NaN, lpmodel.num_variables_created)
@@ -159,7 +177,7 @@ end
 
 
 # Here 1 is set whenever the index variable is defined to be integer.
-function get_integer_variables(lpmodel::LPModel)
+function get_integer_variables(lpmodel)
     cis_i = MOI.get(lpmodel, MOI.ListOfConstraintIndices{MathOptInterface.SingleVariable,MathOptInterface.Integer}())
 
     integer = fill(NaN, lpmodel.num_variables_created)
@@ -171,7 +189,7 @@ function get_integer_variables(lpmodel::LPModel)
 end
 
 # Here 1 is set whenever the index variable is defined to be zero_one.
-function get_zero_one_variables(lpmodel::LPModel)
+function get_zero_one_variables(lpmodel)
     cis_z = MOI.get(lpmodel, MOI.ListOfConstraintIndices{MathOptInterface.SingleVariable,MathOptInterface.ZeroOne}())
 
     zero_one = fill(NaN, lpmodel.num_variables_created)
@@ -185,7 +203,7 @@ end
 
 
 # Gets objective vector of an LPModel as a vector of indices.
-function get_objective_vector(lpmodel::LPModel)
+function get_objective_vector(lpmodel)
     obj = lpmodel.objective
     c = zeros(size(obj.terms)[1])
     for term in obj.terms
@@ -218,7 +236,7 @@ struct LPRep
     obj_constant::Float64
 
     # Matrix A and vector b representing the linear system of LessThan inequalities.
-    A::Array{Float64,2}
+    A::SparseMatrixCSC{Float64, Integer}
     b::Array{Float64,1}
 
     # greater than variables

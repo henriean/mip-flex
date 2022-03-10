@@ -6,24 +6,35 @@ solve
 
 export solve!
 
-function solve!(::LPModel, ::JuMP.Model, ::AbstractSolveAttribute) <: Bool end
+#function solve!(::LPModel, ::JuMP.Model, ::AbstractSolveAttribute) <: Bool end
 
 
 # Will construct the constraint graph and find a feasible solution or deem the problem infeasible
 # NB: Assumes the model to have difference constraints only!
-function solve!(lpmodel::LPModel, model::JuMP.Model, ::ShortestPath)
-    A, b = get_constraint_matrices(lpmodel)
+function solve!(At, b, model::JuMP.Model, ::ShortestPath)
+    # NB: Works on transpose of A
+    nzval = At.nzval
+    colptr = At.colptr
+    rowval = At.rowval
+    variable_count = At.m # rows
+    constraint_count = At.n # columns
 
-    edges = fill((0,0), size(A)[1])   # Number of constraints
+    edges = fill((0,0), constraint_count)   # Number of constraints
 
-    num_vars = size(A)[2]
-    distmx = zeros(num_vars, num_vars)
+    distmx = zeros(variable_count, variable_count)
 
     # Get list of edges and distance matrix
+    # Go through each constraint
     index = 1
-    for row in eachrow(A)
-        i = findall(x->x==-1, row)[1]
-        j = findall(x->x==1, row)[1]
+    for k in 1:constraint_count
+        values = nzval[colptr[k]:colptr[k+1]-1]
+        
+        # Find constraint index (row value in transpose) where the values are 1 and -1
+        i = findall(x->x==-1, values)[1]
+        i = rowval[colptr[k]-1 + i]
+        j = findall(x->x==1, values)[1]
+        j = rowval[colptr[k]-1 + j]
+
         edge = (i,j)
         edges[index] = edge
 
@@ -35,18 +46,18 @@ function solve!(lpmodel::LPModel, model::JuMP.Model, ::ShortestPath)
     # Directed graph
     digraph = SimpleDiGraph(Edge.(edges))
     # Use all vertices as sources, as we omit the starting source
-    sources = collect(1:num_vars)
+    sources = collect(1:variable_count)
     
     try  
-        bf = bellman_ford_shortest_paths(digraph, sources, distmx)
+        bf = SolverPeeker.bellman_ford_shortest_paths(digraph, sources, distmx)
         distances = bf.dists
         print("\nFeasible solution found:\n")
         show(distances)
         print("\n")
-        # Update to feasible unbounded solution
+        # Check if solution + constant alter solution, and then report if unique or unbounded solution?
         return true
     catch error
-        if isa(error, LightGraphs.NegativeCycleError)
+        if isa(error, NegativeCycleError)
             # Update no feasible solution
             print("\nInfeasible solution.\n")
             return true
