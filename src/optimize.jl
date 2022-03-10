@@ -4,8 +4,8 @@ optimize
 
 export optimize!
 
-function optimize!(::JuMP.Model, ::AbstractOptimizeAttribute) <: Bool end
-function optimize!(::JuMP.Model) <: Bool end
+#function optimize!(::JuMP.Model, ::AbstractOptimizeAttribute) <: Bool end
+#function optimize!(::JuMP.Model) <: Bool end
 
 
 # Will use all available methods for recognizion, and solving if recognized.
@@ -14,9 +14,11 @@ function optimize!(::JuMP.Model) <: Bool end
 function optimize!(model::JuMP.Model)
 
     lpmodel = get_lpmodel(model)
+    A, b, At = get_constraint_matrices(lpmodel)
 
-    if recognize(lpmodel, DifferenceConstraints()) && recognize(lpmodel, AllIntegerConstraintBounds())
-        if solve!(lpmodel, model, ShortestPath()) 
+    recognized, b = recognize(At, b, DifferenceConstraints())
+    if recognized && recognize(b, AllIntegerConstraintBounds())
+        if solve!(At, b, model, ShortestPath()) 
             print("\nProgram solved with Bellman-Ford shortest path.\n")
             return true     # Replace with status
         end
