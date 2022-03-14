@@ -42,14 +42,12 @@ jobs:
           file: lcov.info
   docs:
   name: Documentation
-
   on:
   push:
     branches:
       - master
     tags: '*'
   pull_request:
-
   jobs:
   build:
     runs-on: ubuntu-latest
