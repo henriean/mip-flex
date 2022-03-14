@@ -1,7 +1,7 @@
+push!(LOAD_PATH,"../src/")
 using SolverPeeker
 using Documenter
 
-push!(LOAD_PATH,"../src/")
 DocMeta.setdocmeta!(SolverPeeker, :DocTestSetup, :(using SolverPeeker); recursive=true)
 
 makedocs(;
