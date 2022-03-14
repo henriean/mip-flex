@@ -73,12 +73,11 @@ end
 
 
 
-"""
 
-function recognize(lpmodel::LPModel, ::ConstantObjective)
-    c = get_objective_vector(lpmodel)
-    return (c == zeros(size(c)[1]))
-end"""
+#function recognize(lpmodel::LPModel, ::ConstantObjective)
+#    c = get_objective_vector(lpmodel)
+#    return (c == zeros(size(c)[1]))
+#end
 
 
 

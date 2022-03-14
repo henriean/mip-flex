@@ -1,7 +1,7 @@
 using LightGraphs
 
 """
-solve
+Solve
 """
 
 export solve!
@@ -9,8 +9,8 @@ export solve!
 #function solve!(::LPModel, ::JuMP.Model, ::AbstractSolveAttribute) <: Bool end
 
 
-# Will construct the constraint graph and find a feasible solution or deem the problem infeasible
-# NB: Assumes the model to have difference constraints only!
+""" Will construct the constraint graph and find a feasible solution or deem the problem infeasible
+ NB: Assumes the model to have difference constraints only! """
 function solve!(At, b, model::JuMP.Model, ::ShortestPath)
     # NB: Works on transpose of A
     nzval = At.nzval
