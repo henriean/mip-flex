@@ -8,7 +8,7 @@ in order to specify which features of the provided model to look into.
 
 """
 
-export ConstantObjective, DifferenceConstraints, AllIntegerVariables, AllIntegerConstraintBounds
+export ConstantObjective, AllIntegerVariables, AllIntegerConstraintBounds
 
 
 abstract type AbstractRecognizeAttribute end
@@ -16,7 +16,7 @@ abstract type AbstractRecognizeAttribute end
 
 # TODO: Describe each attribute
 
-struct DifferenceConstraints <: AbstractRecognizeAttribute end
+#struct DifferenceConstraints <: AbstractRecognizeAttribute end
 struct AllIntegerVariables <: AbstractRecognizeAttribute end
 struct ConstantObjective <: AbstractRecognizeAttribute end
 struct AllIntegerConstraintBounds <: AbstractRecognizeAttribute end

@@ -33,14 +33,7 @@ end
 
 
 @testset "lprep.jl" begin
-    #lpmod = lpmodel(model1)
-    #show(lpmodel)
-    lprep = LPRep(model1)
-    show(lprep.A)
-    print("\n\n")
-    #show(typeof(model1))
-    #show(lprep.obj_constant)
-    print("\n\n")
-    #show(typeof(lpmodel.sense))
-    #cis_i = MOI.get(lpmodel, MOI.ListOfConstraintIndices{MathOptInterface.SingleVariable,MathOptInterface.Integer}())
+    #peeker = Peeker(model1)
+    #Base.show(Base.stdout, peeker)
+    #show(isa(peeker, JuMP.AbstractModel))
 end
