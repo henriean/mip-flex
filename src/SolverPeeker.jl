@@ -11,7 +11,9 @@ module SolverPeeker
 using JuMP
 using MathOptInterface
 using SparseArrays
-using Memoization
+using LightGraphs
+using Graphs, SimpleWeightedGraphs
+using LinearAlgebra
 const MOI = MathOptInterface
 const MOIU = MOI.Utilities
 
