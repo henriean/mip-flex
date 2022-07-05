@@ -5,6 +5,7 @@ using MathOptInterface
 using SparseArrays
 const MOI = MathOptInterface
 using GLPK
+using LinearAlgebra
 
 # Start writing tests here, then divide into seperate files
 
@@ -91,6 +92,7 @@ using GLPK
         @variable(model2, u <= 8)
         @constraint(model2, u >= 3)
         @constraint(model2, u >= 8)
+        @variable(model2, v == -4)
         @variable(model2, a[1:2], Bin)
         @objective(model2, Max, t+3x+5y-2z+sum(a))
 
@@ -105,7 +107,7 @@ using GLPK
         #integer = [true, false, false, true, true]
         #zero_one = [NaN, NaN, NaN, 1, 1]
         
-        @test length(lp2.var_to_name) == 7
+        @test length(lp2.var_to_name) == 8
 
 
         for (index, name) in lp2.var_to_name
@@ -149,6 +151,11 @@ using GLPK
                 @test_throws KeyError lp2.less_than[index]
                 @test_throws KeyError lp2.integer[index]
                 @test lp2.equal_to[index] == 8
+            elseif (name == "v")
+                @test_throws KeyError lp2.greater_than[index]
+                @test_throws KeyError lp2.less_than[index]
+                @test_throws KeyError lp2.integer[index]
+                @test lp2.equal_to[index] == -4
             else
                 @test false
             end
@@ -427,6 +434,10 @@ using GLPK
         @test !lp6.is_consistent
 
 
+        # Test when variables are not in A
+        
+
+
     end
 
 
@@ -578,6 +589,9 @@ using GLPK
 
 
     @testset "optimize.jl" begin
+
+
+        """ DifferenceConstraints """
         # Test feasible unbounded
         model1 = Model()
         @variable(model1, x1, Int)
@@ -591,9 +605,9 @@ using GLPK
         @constraint(model1, x2-x5 <= -1) 
         @constraint(model1, x2-x5 <= -1.3) # Add stricter and check that this is used in the algorithm
         @constraint(model1, x2-x5 <= -0.5) # Add less strict, and check that this is not used in the algorithm
-        @constraint(model1, x3-x1 <= 7)
+        @constraint(model1, 2x3-2x1 <= 14)
         @constraint(model1, x4-x1 <= 6)
-        @constraint(model1, x4-x3 <= -1)
+        @constraint(model1, 2x4-2x3 <= -2)
         @constraint(model1, x5-x3 <= -3)
         @constraint(model1, x5-x4 <= -2.5)
 
@@ -603,17 +617,17 @@ using GLPK
         @test algoModel1.status == TerminationStatus(4)
         # Test correct solution
         solution = algoModel1.solution
-        sol = [-6, -5.3, 0, -1, -4]
+        sol = [-5, -4.8, 0, -1, -4]
         @test solution.primal_status == SolutionStatus(2)
         @test issetequal(solution.x, sol)
-        @test solution.objective_value == -33.3
+        @test solution.objective_value == dot([-5, -4.8, 0, -1, -4], [1, 1, -5, 2, 6]) + 4
         @test typeof(solution.algorithm_used) == typeof(DifferenceConstraints())
 
         # Test mapping between variable names and values. 
         name_to_var = Dict(value => key for (key, value) in algoModel1.rep.var_to_name)
         x = solution.x
-        @test x[name_to_var["x1"]] == -6
-        @test x[name_to_var["x2"]] == -5.3
+        @test x[name_to_var["x1"]] == -5
+        @test x[name_to_var["x2"]] == -4.8
         @test x[name_to_var["x3"]] == 0
         @test x[name_to_var["x4"]] == -1
         @test x[name_to_var["x5"]] == -4
@@ -669,9 +683,399 @@ using GLPK
         @test isnothing(solution.objective_value)
         @test isnothing(solution.algorithm_used)
 
-        # TODO: Test that the 0 transformation works
 
-        #TODO: Test big problem?
+        # Test on the edge of being feasible vs negative cycle
+        # Negative cycle
+        model5 = Model()
+        @variable(model5, x1)
+        @variable(model5, x2, Int)
+        @variable(model5, x3)
+        @variable(model5, x4)
+        @variable(model5, x5 , Int)
+        @variable(model5, x6 == 0)
+        @constraint(model5, x1-x2 <= 0)
+        @constraint(model5, x1-x5 <= -1.2)
+        @constraint(model5, x2-x5 <= 1)
+        @constraint(model5, x3-x1 <= 5.4)
+        @constraint(model5, x4-x1 <= 4.2)
+        @constraint(model5, x4-x3 <= -1.3)
+        @constraint(model5, x5-x3 <= -3)
+        @constraint(model5, x5-x4 <= -3)
+
+        algoModel5 = AlgoModel(model5)
+
+        @test SolverPeeker.optimize!(algoModel5, DifferenceConstraints()) == true
+        @test algoModel5.status == TerminationStatus(3)
+
+        @test typeof(algoModel5.solution.algorithm_used) == typeof(DifferenceConstraints())
+
+
+        # Feasible, cycle adjusted to 0
+        model5 = Model()
+        @variable(model5, x1)
+        @variable(model5, x2, Int)
+        @variable(model5, x3)
+        @variable(model5, x4)
+        @variable(model5, x5 , Int)
+        @variable(model5, x6 == 0)
+        @constraint(model5, x1-x2 <= 0)
+        @constraint(model5, x1-x5 <= -1.2)
+        @constraint(model5, x2-x5 <= 1)
+        @constraint(model5, x3-x1 <= 5.5)
+        @constraint(model5, x4-x1 <= 4.2)
+        @constraint(model5, x4-x3 <= -1.3)
+        @constraint(model5, x5-x3 <= -3)
+        @constraint(model5, x5-x4 <= -3)
+
+        algoModel5 = AlgoModel(model5)
+
+        @test SolverPeeker.optimize!(algoModel5, DifferenceConstraints()) == true
+        @test algoModel5.status == TerminationStatus(4)
+
+        solution = algoModel5.solution
+        @test solution.primal_status == SolutionStatus(2)
+        sol = [-5.5, -4, 0, -1.3, -5, 0]
+        @test issetequal(solution.x, sol)
+
+        @test typeof(solution.algorithm_used) == typeof(DifferenceConstraints())
+
+
+        """ Moving solution """
+
+        # Moving solution from model5 above one, with rounding
+        model5 = Model()
+        @variable(model5, x1 >= 1)
+        @variable(model5, x2 >= 1, Int)
+        @variable(model5, x3 >= 1)
+        @variable(model5, x4 >= 1)
+        @variable(model5, x5 >= 1, Int)
+        @variable(model5, x6 == 0)
+        @constraint(model5, x1-x2 <= 0)
+        @constraint(model5, x1-x5 <= -1.2)
+        @constraint(model5, x2-x5 <= 1)
+        @constraint(model5, x3-x1 <= 5.5)
+        @constraint(model5, x4-x1 <= 4.2)
+        @constraint(model5, x4-x3 <= -1.3)
+        @constraint(model5, x5-x3 <= -3)
+        @constraint(model5, x5-x4 <= -3)
+
+        algoModel5 = AlgoModel(model5)
+
+        @test SolverPeeker.optimize!(algoModel5, DifferenceConstraints()) == true
+        @test algoModel5.status == TerminationStatus(4)
+
+        solution = algoModel5.solution
+        @test solution.primal_status == SolutionStatus(2)
+        sol = [(7-5.5), (7-4), 7, (7-1.3), (7-5), 0]   # Gets +7 to non-equal variables
+        @test issetequal(solution.x, sol)
+        @test typeof(solution.algorithm_used) == typeof(DifferenceConstraints())
+        
+
+        # Moving solution below -7.2, with rounding, and with two variables being equal_to.
+        # Should subtract 8, even though there are no integers, because of implementation.
+        model4 = Model()
+        @variable(model4, x1 <= -7.2)
+        @variable(model4, x2 <= -7.2)
+        @variable(model4, x3 <= -7.2)
+        @variable(model4, x4 == 23)
+        @variable(model4, x5 <= -7.2)
+        @variable(model4, x6 <= -7.2)
+        @variable(model4, x7 == -30)
+        @constraint(model4, x1-x2 <= 0)
+        @constraint(model4, x1-x6 <= -1)
+        @constraint(model4, x2-x6 <= 1)
+        @constraint(model4, x3-x1 <= 5)
+        @constraint(model4, x5-x1 <= 4)
+        @constraint(model4, x5-x3 <= -1)
+        @constraint(model4, x6-x3 <= -3)
+        @constraint(model4, x6-x5 <= -3)
+
+        algoModel4 = AlgoModel(model4)
+
+        @test SolverPeeker.optimize!(algoModel4, DifferenceConstraints()) == true
+        @test algoModel4.status == TerminationStatus(4)
+
+        solution = algoModel4.solution
+        @test solution.primal_status == SolutionStatus(2)
+        sol = [-13, -11, -8, 23, -9, -12, -30]
+        @test issetequal(solution.x, sol)
+        @test typeof(solution.algorithm_used) == typeof(DifferenceConstraints())
+
+        # Test split feasible, move solution up
+        model5 = Model()
+        @variable(model5, x1 <= 6)
+        @variable(model5, x2 <= 6, Int)
+        @variable(model5, x3 >= 6)
+        @variable(model5, x4 >= 6)
+        @variable(model5, x5 <= 6, Int)
+        @variable(model5, x6 == 0)
+        @constraint(model5, x1-x2 <= 0)
+        @constraint(model5, x1-x5 <= -1.2)
+        @constraint(model5, x2-x5 <= 1)
+        @constraint(model5, x3-x1 <= 5.5)
+        @constraint(model5, x4-x1 <= 4.2)
+        @constraint(model5, x4-x3 <= -1.3)
+        @constraint(model5, x5-x3 <= -3)
+        @constraint(model5, x5-x4 <= -3)
+
+        algoModel5 = AlgoModel(model5)
+
+        @test SolverPeeker.optimize!(algoModel5, DifferenceConstraints()) == true
+        @test algoModel5.status == TerminationStatus(4)
+
+        solution = algoModel5.solution
+        @test solution.primal_status == SolutionStatus(2)
+        sol = [(8-5.5), 4, 8, (8-1.3), 3, 0]    # add ceil(6 - (-1.3)) = 8, and is not too much for lesser set, so ok.
+        @test issetequal(solution.x, sol)
+        @test typeof(solution.algorithm_used) == typeof(DifferenceConstraints())
+
+        # Test split feasible, move solution down
+        model5 = Model()
+        @variable(model5, x1 <= -10)
+        @variable(model5, x2 <= -10, Int)
+        @variable(model5, x3 >= -10)
+        @variable(model5, x4 >= -10)
+        @variable(model5, x5 <= -10, Int)
+        @variable(model5, x6 == 0)
+        @constraint(model5, x1-x2 <= 0)
+        @constraint(model5, x1-x5 <= -1.2)
+        @constraint(model5, x2-x5 <= 1)
+        @constraint(model5, x3-x1 <= 5.5)
+        @constraint(model5, x4-x1 <= 4.2)
+        @constraint(model5, x4-x3 <= -1.3)
+        @constraint(model5, x5-x3 <= -3)
+        @constraint(model5, x5-x4 <= -3)
+
+        algoModel5 = AlgoModel(model5)
+
+        @test SolverPeeker.optimize!(algoModel5, DifferenceConstraints()) == true
+        @test algoModel5.status == TerminationStatus(4)
+
+        solution = algoModel5.solution
+        @test solution.primal_status == SolutionStatus(2)
+        sol = [(-5.5-6), -10, -6, (-1.3-6), -11, 0]    # substract ceil(-4 - (-10)) = 6
+        @test issetequal(solution.x, sol)
+        @test typeof(solution.algorithm_used) == typeof(DifferenceConstraints())
+
+
+        # Test split where not feasible
+        model5 = Model()
+        @variable(model5, x1 <= 0)
+        @variable(model5, x2 >= 0, Int)
+        @variable(model5, x3 <= 0)
+        @variable(model5, x4 >= 0)
+        @variable(model5, x5 >= 0, Int)
+        @variable(model5, x6 == 0)
+        @constraint(model5, x1-x2 <= 0)
+        @constraint(model5, x1-x5 <= -1.2)
+        @constraint(model5, x2-x5 <= 1)
+        @constraint(model5, x3-x1 <= 5.5)
+        @constraint(model5, x4-x1 <= 4.2)
+        @constraint(model5, x4-x3 <= -1.3)
+        @constraint(model5, x5-x3 <= -3)
+        @constraint(model5, x5-x4 <= -3)
+
+        algoModel5 = AlgoModel(model5)
+
+        @test SolverPeeker.optimize!(algoModel5, DifferenceConstraints()) == true
+        @test algoModel5.status == TerminationStatus(3)
+        @test typeof(algoModel5.solution.algorithm_used) == typeof(DifferenceConstraints())
+
+        
+
+        # Test split not feasible when would want to move less than an integer up.
+        model5 = Model()
+        @variable(model5, x1 <= 2.4)
+        @variable(model5, x2 >= 2.4, Int)
+        @variable(model5, x3 >= 2.4)
+        @variable(model5, x4 >= 2.4)
+        @variable(model5, x5 >= 2.4, Int)
+        @variable(model5, x6 == 0)
+        @constraint(model5, x1-x2 <= 0)
+        @constraint(model5, x1-x5 <= -1.2)
+        @constraint(model5, x2-x5 <= 1)
+        @constraint(model5, x3-x1 <= 5.5)
+        @constraint(model5, x4-x1 <= 4.2)
+        @constraint(model5, x4-x3 <= -1.3)
+        @constraint(model5, x5-x3 <= -3)
+        @constraint(model5, x5-x4 <= -3)
+
+        algoModel5 = AlgoModel(model5)
+
+        @test SolverPeeker.optimize!(algoModel5, DifferenceConstraints()) == true
+        @test algoModel5.status == TerminationStatus(3)
+        @test typeof(algoModel5.solution.algorithm_used) == typeof(DifferenceConstraints())
+
+        # But ok when it adds to an integer number
+        model5 = Model()
+        @variable(model5, x1 <= 2.5)
+        @variable(model5, x2 >= 2.5, Int)
+        @variable(model5, x3 >= 2.5)
+        @variable(model5, x4 >= 2.5)
+        @variable(model5, x5 >= 2.5, Int)
+        @variable(model5, x6 == 0)
+        @constraint(model5, x1-x2 <= 0)
+        @constraint(model5, x1-x5 <= -1.2)
+        @constraint(model5, x2-x5 <= 1)
+        @constraint(model5, x3-x1 <= 5.5)
+        @constraint(model5, x4-x1 <= 4.2)
+        @constraint(model5, x4-x3 <= -1.3)
+        @constraint(model5, x5-x3 <= -3)
+        @constraint(model5, x5-x4 <= -3)
+
+        algoModel5 = AlgoModel(model5)
+
+        @test SolverPeeker.optimize!(algoModel5, DifferenceConstraints()) == true
+        @test algoModel5.status == TerminationStatus(4)
+
+        solution = algoModel5.solution
+        @test solution.primal_status == SolutionStatus(2)
+        # add ceil(2.5 - (-5)) = 8. Ok, because then x1 meets the bound exactly
+        sol = [(-5.5+8), (-4+8), (0+8), (-1.3+8), (-5+8), 0]
+        @test issetequal(solution.x, sol)
+        @test typeof(solution.algorithm_used) == typeof(DifferenceConstraints())
+
+        # Same for moving down, infeasible
+        model5 = Model()
+        @variable(model5, x1 <= -7.6)
+        @variable(model5, x2 >=  -7.6, Int)
+        @variable(model5, x3 >=  -7.6)
+        @variable(model5, x4 >=  -7.6)
+        @variable(model5, x5 >=  -7.6, Int)
+        @variable(model5, x6 == 0)
+        @constraint(model5, x1-x2 <= 0)
+        @constraint(model5, x1-x5 <= -1.2)
+        @constraint(model5, x2-x5 <= 1)
+        @constraint(model5, x3-x1 <= 5.5)
+        @constraint(model5, x4-x1 <= 4.2)
+        @constraint(model5, x4-x3 <= -1.3)
+        @constraint(model5, x5-x3 <= -3)
+        @constraint(model5, x5-x4 <= -3)
+
+        algoModel5 = AlgoModel(model5)
+
+        @test SolverPeeker.optimize!(algoModel5, DifferenceConstraints()) == true
+        @test algoModel5.status == TerminationStatus(3)
+        @test typeof(algoModel5.solution.algorithm_used) == typeof(DifferenceConstraints())
+
+        
+        # Moving down, feasible
+        model5 = Model()
+        @variable(model5, x1 <= -7.5)
+        @variable(model5, x2 >=  -7.5, Int)
+        @variable(model5, x3 >=  -7.5)
+        @variable(model5, x4 >=  -7.5)
+        @variable(model5, x5 >=  -7.5, Int)
+        @variable(model5, x6 == 0)
+        @constraint(model5, x1-x2 <= 0)
+        @constraint(model5, x1-x5 <= -1.2)
+        @constraint(model5, x2-x5 <= 1)
+        @constraint(model5, x3-x1 <= 5.5)
+        @constraint(model5, x4-x1 <= 4.2)
+        @constraint(model5, x4-x3 <= -1.3)
+        @constraint(model5, x5-x3 <= -3)
+        @constraint(model5, x5-x4 <= -3)
+
+        algoModel5 = AlgoModel(model5)
+
+        @test SolverPeeker.optimize!(algoModel5, DifferenceConstraints()) == true
+        @test algoModel5.status == TerminationStatus(4)
+
+        solution = algoModel5.solution
+        @test solution.primal_status == SolutionStatus(2)
+        # subtract ceil(-5.5 - (-7.5)) = ceil(2.0) = 2. Ok, because then x5 meets doesn't supass -7.5
+        sol = [(-5.5-2), (-4-2), (0-2), (-1.3-2), (-5-2), 0]
+        @test issetequal(solution.x, sol)
+        @test typeof(solution.algorithm_used) == typeof(DifferenceConstraints())
+
+
+        # Test infeasible with integer, but no integer, don't care
+        model6 = Model()
+        @variable(model6, x1 >= 1.5, Int)
+        @variable(model6, x2 <= 1.5)
+        @variable(model6, x3 >=  1.5)
+        @constraint(model6, x1-x3 <= -1.0)
+        @constraint(model6, x2-x3 <= -1.1)
+
+        algoModel6 = AlgoModel(model6)
+
+        @test SolverPeeker.optimize!(algoModel6, DifferenceConstraints()) == true
+        @test algoModel6.status == TerminationStatus(3)
+        @test typeof(algoModel6.solution.algorithm_used) == typeof(DifferenceConstraints())
+
+
+        # Remove integer, and see that it works
+        model6 = Model()
+        @variable(model6, x1 >= 1.5)
+        @variable(model6, x2 <= 1.5)
+        @variable(model6, x3 >=  1.5)
+        @constraint(model6, x1-x3 <= -1.0)
+        @constraint(model6, x2-x3 <= -1.1)
+
+        algoModel6 = AlgoModel(model6)
+
+        @test SolverPeeker.optimize!(algoModel6, DifferenceConstraints()) == true
+        @test algoModel6.status == TerminationStatus(4)
+
+        solution = algoModel6.solution
+        @test solution.primal_status == SolutionStatus(2)
+        # add 1.5 - (-1) = 2.5
+        sol = [-1.0 + 2.5, -1.1 + 2.5, 0+2.5]
+        @test issetequal(solution.x, sol)
+        @test typeof(solution.algorithm_used) == typeof(DifferenceConstraints())
+
+
+        # Test same with moving solution down
+        model6 = Model()
+        @variable(model6, x1 >= -1.5, Int)
+        @variable(model6, x2 <= -1.5)
+        @variable(model6, x3 >=  -1.5)
+        @constraint(model6, x1-x3 <= -1.0)
+        @constraint(model6, x2-x3 <= -1.1)
+
+        algoModel6 = AlgoModel(model6)
+
+        @test SolverPeeker.optimize!(algoModel6, DifferenceConstraints()) == true
+        @test algoModel6.status == TerminationStatus(3)
+        @test typeof(algoModel6.solution.algorithm_used) == typeof(DifferenceConstraints())
+
+        # Remove integer, and see that it works
+        model6 = Model()
+        @variable(model6, x1 >= -1.6)
+        @variable(model6, x2 <= -1.6)
+        @variable(model6, x3 >=  -1.6)
+        @constraint(model6, x1-x3 <= -1.0)
+        @constraint(model6, x2-x3 <= -1.1)
+
+        algoModel6 = AlgoModel(model6)
+
+        @test SolverPeeker.optimize!(algoModel6, DifferenceConstraints()) == true
+        @test algoModel6.status == TerminationStatus(4)
+
+        solution = algoModel6.solution
+        @test solution.primal_status == SolutionStatus(2)
+        # substract -1.2 - (-1.7) = 0.5
+        sol = [-1.0 - 0.5, -1.1 - 0.5, 0 - 0.5]
+        @test issetequal(solution.x, sol)
+        @test typeof(solution.algorithm_used) == typeof(DifferenceConstraints())
+
+
+        # Test different bounds, and thus not recoginizable
+
+        model6 = Model()
+        @variable(model6, x1 >= 1.5)
+        @variable(model6, x2 <= -1.5)
+        @variable(model6, x3 >=  1.5)
+        @constraint(model6, x1-x3 <= -1.0)
+        @constraint(model6, x2-x3 <= -1.1)
+
+        algoModel6 = AlgoModel(model6)
+
+        @test SolverPeeker.optimize!(algoModel6, DifferenceConstraints()) == false
+        @test algoModel6.status == TerminationStatus(1)
+        @test typeof(algoModel6.solution.algorithm_used) == Nothing
+
+
 
     end
 

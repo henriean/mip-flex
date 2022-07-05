@@ -266,7 +266,7 @@ function LPRep(lpmodel::LPModel)
     cis_e = MOI.get(lpmodel, MOI.ListOfConstraintIndices{MOI.VariableIndex, MathOptInterface.EqualTo{Float64}}())
     equal_to = Dict()
     for i in (1:size(cis_e)[1])
-        equal_to[cis_e[i].value] = MOI.get(lpmodel, MOI.ConstraintSet(), cis_e[1]).value
+        equal_to[cis_e[i].value] = MOI.get(lpmodel, MOI.ConstraintSet(), cis_e[i]).value
     end
 
     
