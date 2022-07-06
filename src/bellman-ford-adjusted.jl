@@ -9,16 +9,15 @@ function bellman_ford_adjusted(graph, distmtx, integral_vertices)
     nv = Graphs.nv(graph)  # Number of vertices
 
     # start at zero distance for each vertex, update lower bound
-    classic_distances = zeros(nv) 
-    integral_distances = Dict()
+    distances = zeros(nv) 
 
     for i in 1:(nv-1)
         for edge in Graphs.edges(graph)
             vi = Graphs.src(edge)
             vj = Graphs.dst(edge)
 
-            vid = classic_distances[vi]
-            vjd = classic_distances[vj]
+            vid = distances[vi]
+            vjd = distances[vj]
 
             # Since 0-edges not stored, stores them as eps(0.0), so convert back to 0 if so.
             edge_weight = (distmtx[vi, vj] == eps(0.0)) ? 0 : distmtx[vi, vj]
@@ -28,13 +27,12 @@ function bellman_ford_adjusted(graph, distmtx, integral_vertices)
             if in(vj, integral_vertices)
                 relax_value = floor(distance_via_vi)
                 if vjd > relax_value
-                    integral_distances[vj] = relax_value
-                    classic_distances[vj] = distance_via_vi
+                    distances[vj] = relax_value
                 end
             else
                 relax_value = distance_via_vi
                 if vjd > relax_value
-                    classic_distances[vj] = distance_via_vi
+                    distances[vj] = distance_via_vi
                 end
             end
 
@@ -46,8 +44,8 @@ function bellman_ford_adjusted(graph, distmtx, integral_vertices)
         vi = Graphs.src(edge)
         vj = Graphs.dst(edge)
 
-        vid = classic_distances[vi]
-        vjd = classic_distances[vj]
+        vid = distances[vi]
+        vjd = distances[vj]
 
         # Since 0-edges not stored, stores them as eps(0.0), so convert back to 0 if so.
         edge_weight = distmtx[vi, vj]==eps(0.0) ? 0 : distmtx[vi, vj]
@@ -60,11 +58,7 @@ function bellman_ford_adjusted(graph, distmtx, integral_vertices)
 
     end
 
-    # Add the integral distances into the result
-    for (key, value) in integral_distances
-        classic_distances[key] = value
-    end
 
-    return classic_distances
+    return distances
 
 end

@@ -617,17 +617,18 @@ using LinearAlgebra
         @test algoModel1.status == TerminationStatus(4)
         # Test correct solution
         solution = algoModel1.solution
-        sol = [-5, -4.8, 0, -1, -4]
+        sol = [-6, -5.3, 0, -1, -4]
         @test solution.primal_status == SolutionStatus(2)
         @test issetequal(solution.x, sol)
-        @test solution.objective_value == dot([-5, -4.8, 0, -1, -4], [1, 1, -5, 2, 6]) + 4
+        @test solution.objective_value == dot(sol, [1, 1, -5, 2, 6]) + 4
         @test typeof(solution.algorithm_used) == typeof(DifferenceConstraints())
+
 
         # Test mapping between variable names and values. 
         name_to_var = Dict(value => key for (key, value) in algoModel1.rep.var_to_name)
         x = solution.x
-        @test x[name_to_var["x1"]] == -5
-        @test x[name_to_var["x2"]] == -4.8
+        @test x[name_to_var["x1"]] == -6
+        @test x[name_to_var["x2"]] == -5.3
         @test x[name_to_var["x3"]] == 0
         @test x[name_to_var["x4"]] == -1
         @test x[name_to_var["x5"]] == -4
@@ -647,6 +648,7 @@ using LinearAlgebra
 
         algoModel2 = AlgoModel(model2)
 
+        
         # Test comes to a decision:
         @test SolverPeeker.optimize!(algoModel2, DifferenceConstraints()) == true
         #@test SolverPeeker.optimize!(model2, DifferenceConstraints()) == true
@@ -721,7 +723,7 @@ using LinearAlgebra
         @constraint(model5, x1-x2 <= 0)
         @constraint(model5, x1-x5 <= -1.2)
         @constraint(model5, x2-x5 <= 1)
-        @constraint(model5, x3-x1 <= 5.5)
+        @constraint(model5, x3-x1 <= 6.2)
         @constraint(model5, x4-x1 <= 4.2)
         @constraint(model5, x4-x3 <= -1.3)
         @constraint(model5, x5-x3 <= -3)
@@ -734,7 +736,7 @@ using LinearAlgebra
 
         solution = algoModel5.solution
         @test solution.primal_status == SolutionStatus(2)
-        sol = [-5.5, -4, 0, -1.3, -5, 0]
+        sol = [-6.2, -4, 0, -2, -5, 0]
         @test issetequal(solution.x, sol)
 
         @test typeof(solution.algorithm_used) == typeof(DifferenceConstraints())
@@ -753,7 +755,7 @@ using LinearAlgebra
         @constraint(model5, x1-x2 <= 0)
         @constraint(model5, x1-x5 <= -1.2)
         @constraint(model5, x2-x5 <= 1)
-        @constraint(model5, x3-x1 <= 5.5)
+        @constraint(model5, x3-x1 <= 6.2)
         @constraint(model5, x4-x1 <= 4.2)
         @constraint(model5, x4-x3 <= -1.3)
         @constraint(model5, x5-x3 <= -3)
@@ -766,7 +768,7 @@ using LinearAlgebra
 
         solution = algoModel5.solution
         @test solution.primal_status == SolutionStatus(2)
-        sol = [(7-5.5), (7-4), 7, (7-1.3), (7-5), 0]   # Gets +7 to non-equal variables
+        sol = [(8-6.2), (8-4), 8, (8-2), (8-5), 0]   # Add ceil(1 - (-6.2)) = 8
         @test issetequal(solution.x, sol)
         @test typeof(solution.algorithm_used) == typeof(DifferenceConstraints())
         
@@ -812,7 +814,7 @@ using LinearAlgebra
         @constraint(model5, x1-x2 <= 0)
         @constraint(model5, x1-x5 <= -1.2)
         @constraint(model5, x2-x5 <= 1)
-        @constraint(model5, x3-x1 <= 5.5)
+        @constraint(model5, x3-x1 <= 6.2)
         @constraint(model5, x4-x1 <= 4.2)
         @constraint(model5, x4-x3 <= -1.3)
         @constraint(model5, x5-x3 <= -3)
@@ -825,7 +827,7 @@ using LinearAlgebra
 
         solution = algoModel5.solution
         @test solution.primal_status == SolutionStatus(2)
-        sol = [(8-5.5), 4, 8, (8-1.3), 3, 0]    # add ceil(6 - (-1.3)) = 8, and is not too much for lesser set, so ok.
+        sol = [(8-6.2), (8-4), 8, (8-2), (8-5), 0]    # add ceil(6 - (-2)) = 8, and is not too much for lesser set, so ok.
         @test issetequal(solution.x, sol)
         @test typeof(solution.algorithm_used) == typeof(DifferenceConstraints())
 
@@ -840,7 +842,7 @@ using LinearAlgebra
         @constraint(model5, x1-x2 <= 0)
         @constraint(model5, x1-x5 <= -1.2)
         @constraint(model5, x2-x5 <= 1)
-        @constraint(model5, x3-x1 <= 5.5)
+        @constraint(model5, x3-x1 <= 6.2)
         @constraint(model5, x4-x1 <= 4.2)
         @constraint(model5, x4-x3 <= -1.3)
         @constraint(model5, x5-x3 <= -3)
@@ -853,7 +855,7 @@ using LinearAlgebra
 
         solution = algoModel5.solution
         @test solution.primal_status == SolutionStatus(2)
-        sol = [(-5.5-6), -10, -6, (-1.3-6), -11, 0]    # substract ceil(-4 - (-10)) = 6
+        sol = [(-6.2-6), (-4-6), -6, (-2-6), (-5-6), 0]    # substract ceil(-4 - (-10)) = 6
         @test issetequal(solution.x, sol)
         @test typeof(solution.algorithm_used) == typeof(DifferenceConstraints())
 
@@ -869,7 +871,7 @@ using LinearAlgebra
         @constraint(model5, x1-x2 <= 0)
         @constraint(model5, x1-x5 <= -1.2)
         @constraint(model5, x2-x5 <= 1)
-        @constraint(model5, x3-x1 <= 5.5)
+        @constraint(model5, x3-x1 <= 6.2)
         @constraint(model5, x4-x1 <= 4.2)
         @constraint(model5, x4-x3 <= -1.3)
         @constraint(model5, x5-x3 <= -3)
@@ -892,9 +894,9 @@ using LinearAlgebra
         @variable(model5, x5 >= 2.4, Int)
         @variable(model5, x6 == 0)
         @constraint(model5, x1-x2 <= 0)
-        @constraint(model5, x1-x5 <= -1.2)
+        @constraint(model5, x1-x5 <= -0.3)
         @constraint(model5, x2-x5 <= 1)
-        @constraint(model5, x3-x1 <= 5.5)
+        @constraint(model5, x3-x1 <= 5.3)
         @constraint(model5, x4-x1 <= 4.2)
         @constraint(model5, x4-x3 <= -1.3)
         @constraint(model5, x5-x3 <= -3)
@@ -908,16 +910,16 @@ using LinearAlgebra
 
         # But ok when it adds to an integer number
         model5 = Model()
-        @variable(model5, x1 <= 2.5)
-        @variable(model5, x2 >= 2.5, Int)
-        @variable(model5, x3 >= 2.5)
-        @variable(model5, x4 >= 2.5)
-        @variable(model5, x5 >= 2.5, Int)
+        @variable(model5, x1 <= 2.7)
+        @variable(model5, x2 >= 2.7, Int)
+        @variable(model5, x3 >= 2.7)
+        @variable(model5, x4 >= 2.7)
+        @variable(model5, x5 >= 2.7, Int)
         @variable(model5, x6 == 0)
         @constraint(model5, x1-x2 <= 0)
-        @constraint(model5, x1-x5 <= -1.2)
+        @constraint(model5, x1-x5 <= -0.3)
         @constraint(model5, x2-x5 <= 1)
-        @constraint(model5, x3-x1 <= 5.5)
+        @constraint(model5, x3-x1 <= 5.3)
         @constraint(model5, x4-x1 <= 4.2)
         @constraint(model5, x4-x3 <= -1.3)
         @constraint(model5, x5-x3 <= -3)
@@ -930,23 +932,23 @@ using LinearAlgebra
 
         solution = algoModel5.solution
         @test solution.primal_status == SolutionStatus(2)
-        # add ceil(2.5 - (-5)) = 8. Ok, because then x1 meets the bound exactly
-        sol = [(-5.5+8), (-4+8), (0+8), (-1.3+8), (-5+8), 0]
+        # add ceil(2.7 - (-5)) = 8. Ok, because then x1 meets the bound exactly
+        sol = [(-5.3+8), (-4+8), 8, (-1.3+8), (-5+8), 0]
         @test issetequal(solution.x, sol)
         @test typeof(solution.algorithm_used) == typeof(DifferenceConstraints())
 
         # Same for moving down, infeasible
         model5 = Model()
-        @variable(model5, x1 <= -7.6)
-        @variable(model5, x2 >=  -7.6, Int)
-        @variable(model5, x3 >=  -7.6)
-        @variable(model5, x4 >=  -7.6)
-        @variable(model5, x5 >=  -7.6, Int)
+        @variable(model5, x1 <= -7.4)
+        @variable(model5, x2 >= -7.4, Int)
+        @variable(model5, x3 >= -7.4)
+        @variable(model5, x4 >= -7.4)
+        @variable(model5, x5 >= -7.4, Int)
         @variable(model5, x6 == 0)
         @constraint(model5, x1-x2 <= 0)
-        @constraint(model5, x1-x5 <= -1.2)
+        @constraint(model5, x1-x5 <= -0.3)
         @constraint(model5, x2-x5 <= 1)
-        @constraint(model5, x3-x1 <= 5.5)
+        @constraint(model5, x3-x1 <= 5.3)
         @constraint(model5, x4-x1 <= 4.2)
         @constraint(model5, x4-x3 <= -1.3)
         @constraint(model5, x5-x3 <= -3)
@@ -961,16 +963,16 @@ using LinearAlgebra
         
         # Moving down, feasible
         model5 = Model()
-        @variable(model5, x1 <= -7.5)
-        @variable(model5, x2 >=  -7.5, Int)
-        @variable(model5, x3 >=  -7.5)
-        @variable(model5, x4 >=  -7.5)
-        @variable(model5, x5 >=  -7.5, Int)
+        @variable(model5, x1 <= -7.3)
+        @variable(model5, x2 >=  -7.3, Int)
+        @variable(model5, x3 >=  -7.3)
+        @variable(model5, x4 >=  -7.3)
+        @variable(model5, x5 >=  -7.3, Int)
         @variable(model5, x6 == 0)
         @constraint(model5, x1-x2 <= 0)
-        @constraint(model5, x1-x5 <= -1.2)
+        @constraint(model5, x1-x5 <= -0.3)
         @constraint(model5, x2-x5 <= 1)
-        @constraint(model5, x3-x1 <= 5.5)
+        @constraint(model5, x3-x1 <= 5.3)
         @constraint(model5, x4-x1 <= 4.2)
         @constraint(model5, x4-x3 <= -1.3)
         @constraint(model5, x5-x3 <= -3)
@@ -983,8 +985,8 @@ using LinearAlgebra
 
         solution = algoModel5.solution
         @test solution.primal_status == SolutionStatus(2)
-        # subtract ceil(-5.5 - (-7.5)) = ceil(2.0) = 2. Ok, because then x5 meets doesn't supass -7.5
-        sol = [(-5.5-2), (-4-2), (0-2), (-1.3-2), (-5-2), 0]
+        # subtract ceil(-5.3 - (-7.3)) = ceil(2.0) = 2. Ok, because then x5 meets doesn't supass -7.3
+        sol = [(-5.3-2), (-4-2), -2, (-1.3-2), (-5-2), 0]
         @test issetequal(solution.x, sol)
         @test typeof(solution.algorithm_used) == typeof(DifferenceConstraints())
 
