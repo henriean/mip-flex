@@ -44,8 +44,7 @@ function optimize!(model::AlgoModel, ::DifferenceConstraints)
 
 
 
-    #Make the constraint graph
-
+    # Make the constraint graph
     At = rep.At
     nzval = At.nzval
     colptr = At.colptr

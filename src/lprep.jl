@@ -185,7 +185,8 @@ function LPRep(lpmodel::LPModel)
 
     # Constraint indices from regular constraints (only affine in less than allowed.)
     cis = MOI.get(lpmodel, MOI.ListOfConstraintIndices{MOI.ScalarAffineFunction{Float64}, MOI.LessThan{Float64}}())
-    con_number = size(cis)[1]
+    # Initial constraints number.
+    con_number = length(cis)
 
     # Initiate vector of less than constraints values
     b = zeros(con_number)
@@ -200,37 +201,42 @@ function LPRep(lpmodel::LPModel)
     # Go through each constraint and regiser the coefficient for each variable index.
     polynomial_constraint_number = 1
     for i in 1:con_number
+        # Coefficients and variable indices of the left-hand-side of the inequality:
         terms = MOI.get(lpmodel, MOI.ConstraintFunction(), cis[i]).terms
+        # The constant of the right-hand-side:
         constant = MOI.get(lpmodel, MOI.ConstraintSet(), cis[i]).upper
 
-        if size(terms)[1] == 1
+        # If only one variable at the left hand side:
+        if length(terms) == 1
             # Add this to variable constraints
-            index = terms[1].variable.value
-            coefficient = terms[1].coefficient
+            index = terms[1].variable.value     # The variable index
+            coefficient = terms[1].coefficient  # The coefficient
 
             if coefficient > 0
-                # It's less than some number
+                # Variable is less than some number
                 # Normalize constant
                 constant = constant/coefficient
-                # If new least upper bound, update dictionary
+                # If new least upper bound for the variable, update dictionary:
                 update_dict!(less_than, index, constant)
             elseif coefficient < 0
-                # It's greater than some number
+                # Variable is greater than some number
                 # Normalize constant, and flip sign
                 constant = (-constant)/(-coefficient)
-                # If new least upper bound, update dictionary
+                # If new greatest lower bound, update dictionary
                 update_dict!(greater_than, index, constant, false)
             else 
                 # Does not reach this, because if zero, then terms has no length.
+                # TODO: Throw exception?
             end
 
-        elseif size(terms)[1] == 0
+        elseif length(terms) == 0
+            # TODO: Check that the following is true.
             # Variable is set to zero, and if constant is less than zero, it's inconsistent
             # If it's greater than zero, then it's redundant
             if constant < 0
                 is_consistent = false
                 # Stop building? Proof?
-                # It will be constraint nr i states 0>coefficient
+                # It will be that constraint nr i states 0 < negative_constant
             end
 
         else
@@ -239,14 +245,14 @@ function LPRep(lpmodel::LPModel)
                 append!(C, [term.variable.value])
                 append!(V, [term.coefficient])
             end
-            b[polynomial_constraint_number] = MOI.get(lpmodel, MOI.ConstraintSet(), cis[i]).upper
+            b[polynomial_constraint_number] = constant
             polynomial_constraint_number += 1
         end
 
     end
-    # Set the final number of polynomial constraints
+    # Set the final number of polynomial constraints (will overcount by one).
     con_count = polynomial_constraint_number - 1
-    b = b[1:con_count]
+    b = b[1:con_count]  # May be initialized too big
 
     # Make sparse matrices
     A = sparse(R,C,V)
@@ -258,21 +264,21 @@ function LPRep(lpmodel::LPModel)
     # Get integer variables
     cis_i = MOI.get(lpmodel, MOI.ListOfConstraintIndices{MOI.VariableIndex, MathOptInterface.Integer}())
     integer = Dict()
-    for i in (1:size(cis_i)[1])
+    for i in eachindex(cis_i)
         integer[MOI.get(lpmodel, MOI.ConstraintFunction(), cis_i[i]).value] = true
     end
 
     # Get EqualTo-variables
     cis_e = MOI.get(lpmodel, MOI.ListOfConstraintIndices{MOI.VariableIndex, MathOptInterface.EqualTo{Float64}}())
     equal_to = Dict()
-    for i in (1:size(cis_e)[1])
+    for i in eachindex(cis_e)
         equal_to[cis_e[i].value] = MOI.get(lpmodel, MOI.ConstraintSet(), cis_e[i]).value
     end
 
     
     # Update less_than and greater_than from variable constraints
     cis_l = MOI.get(lpmodel, MOI.ListOfConstraintIndices{MOI.VariableIndex, MOI.LessThan{Float64}}())
-    for i in (1:size(cis_l)[1])
+    for i in eachindex(cis_l)
         index = MOI.get(lpmodel, MOI.ConstraintFunction(), cis_l[i]).value
         constant = MOI.get(lpmodel, MOI.ConstraintSet(), cis_l[i]).upper
         update_dict!(less_than, index, constant)
@@ -280,7 +286,7 @@ function LPRep(lpmodel::LPModel)
 
 
     cis_g = MOI.get(lpmodel, MOI.ListOfConstraintIndices{MOI.VariableIndex, MOI.GreaterThan{Float64}}())
-    for i in (1:size(cis_g)[1])
+    for i in eachindex(cis_g)
         index = MOI.get(lpmodel, MOI.ConstraintFunction(), cis_g[i]).value
         constant = MOI.get(lpmodel, MOI.ConstraintSet(), cis_g[i]).lower
         update_dict!(greater_than, index, constant, false)
@@ -293,7 +299,7 @@ function LPRep(lpmodel::LPModel)
     # At this point, if some variables need to be equal others,
     # if the model is still consistent, substitute them in.
     if (is_consistent && !isempty(equal_to))
-        # If A is eempty, nothing to do
+        # If A is empty, nothing to do
         if !isempty(A)
             A, At, b = substitute_equal_to(A, b, equal_to)
             # Check new consistency + remove unneeded constraints.
@@ -489,7 +495,7 @@ function substitute_equal_to(A, b, equal_to)
         values = A.nzval[A.colptr[c]:A.colptr[c+1]-1]
 
         # subtract (equal_to[c] x column) from b
-        for i in 1:length(values)
+        for i in eachindex(values)
             row_index = A.rowval[A.colptr[c]-1 + i]
             b[row_index] -= equal_to[c] * values[i]
         end

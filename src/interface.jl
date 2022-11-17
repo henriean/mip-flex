@@ -37,6 +37,8 @@ function optimize!(model::JuMP.Model, algo_model::AlgoModel; kwargs...)
 end
 
 
+# TODO: Throw exceptions
+# TODO: Fix running Optimize on model as well as algorithm
 function optimize!(algo_model::AlgoModel)
 
     # Check that representation is set
@@ -69,8 +71,8 @@ function optimize!(algo_model::AlgoModel)
 
     # TODO: Parallelism
     for algorithm in algo_model.algorithms
-        # Optimize has to connect a Solution to AlgoModel, 
-        # and return true if came to a conclusion
+        # Optimize has to connect a Solution to AlgoModel if it finds an answer, 
+        # and return true if came to a conclusion. This optimize will be in the optimize file.
         optimize!(algo_model, algorithm)
     end
 end

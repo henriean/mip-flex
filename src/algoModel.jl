@@ -4,6 +4,9 @@ export AlgoModel
 export add_algorithms!, add_algorithm!, set_rep!
 export is_rep_set, are_algorithms_set, got_answer
 
+# TODO: Get-methods and set-methods
+# TODO: Hold JumpModel? (to optimize it. possibility to get new model if a flag for updating?)
+# TODO: Parallelism flag?
 mutable struct AlgoModel
 
     status::TerminationStatus  
@@ -30,7 +33,7 @@ AlgoModel(jump_model, algorithm) = AlgoModel(Trm_NotCalled, LPRep(jump_model), [
 AlgoModel(jump_model, algorithms::Vector) = AlgoModel(Trm_NotCalled, LPRep(jump_model), algorithms, Solution())
 
 
-
+# TDOD: Use set-methods
 
 # Requires model to have an algorithms field.
 function add_algorithms!(algo_model, algorithms::Vector)
@@ -48,6 +51,8 @@ function set_rep!(algo_model, jump_model)
     algo_model.rep = LPRep(jump_model)
 end
 
+
+# TODO: Set JuMP-model
 
 #TODO getters?, Optimize(under ), print solution
 

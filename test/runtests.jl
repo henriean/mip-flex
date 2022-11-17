@@ -30,7 +30,7 @@ using LinearAlgebra
         @constraint(model01, y in MOI.Semiinteger(1, 5))    # Semiinteger
         @objective(model01, Max, x+5y)
         
-        @test_throws TypeError get_lpmodel(model01)
+        @test_throws MathOptInterface.UnsupportedConstraint get_lpmodel(model01)
 
 
         """ Test objective vector will be zero in LPRep if no objective is set """
