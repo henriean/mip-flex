@@ -13,8 +13,12 @@ export recognize
 
 #function recognize(::SparseMatrixCSC{Float64, Int64}, ::Array{Float64,1}, ::AbstractRecognizeAttribute) <: Bool end
 
+# TODO. If x1 - x2 <= 0
+# And x2 - x1 <= 0,
+# Then set x1 == x2.
+# Thus. x1 and x2 can be reduced to one variable with strictest bound.
 
-# Works on AlgoModel
+# Works on AlgoModel.
 function recognize(model, ::DifferenceConstraints)
     # NB: Works on transpose of A
     lp = model.rep

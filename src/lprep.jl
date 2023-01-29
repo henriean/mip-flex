@@ -81,13 +81,6 @@ function get_lpmodel(model::MOI.ModelLike, T::Type = Float64)
     # Do the actual bridging into lpmodel:
     MOI.copy_to(bridging_model, model)
 
-    # Check for supported constraints
-    for (F,S) in MOI.get(lpmodel, MOI.ListOfConstraintTypesPresent())
-        if !MOI.supports_constraint(lpmodel, F, S)
-            throw(MOI.UnsupportedConstraint{F,S}())
-        end
-    end
-
     return lpmodel
 end
 
@@ -164,8 +157,6 @@ struct LPRep
     var_to_name::Dict{Int64, String}
 
 end
-
-
 
 
 # Right now does not support equal to - constraints for variables.
@@ -348,10 +339,6 @@ end
 
 
 LPRep(model::JuMP.Model) = LPRep(get_lpmodel(model))
-
-
-
-
 
 
 

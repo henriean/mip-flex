@@ -6,6 +6,10 @@ Wrapper for JuMP models, looking for patterns in order to find alternative solut
 # Example
 ...
 """
+
+# TODO: An example with sending in heuristic or flag?
+# TODO: Time limit?
+
 module SolverPeeker
 
 using JuMP
@@ -17,6 +21,7 @@ using LinearAlgebra
 const MOI = MathOptInterface
 const MOIU = MOI.Utilities
 
+include("exceptions.jl")
 include("status.jl")
 include("algorithms.jl")
 include("lprep.jl")

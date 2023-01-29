@@ -94,18 +94,12 @@ using LinearAlgebra
         @constraint(model2, u >= 8)
         @variable(model2, v == -4)
         @variable(model2, a[1:2], Bin)
-        @objective(model2, Max, t+3x+5y-2z+sum(a))
 
         lp2 = LPRep(model2)
 
-
-        # How the arrays should look like up to set equality
-        # This takes into account that MOI.ZeroOne now is stored as 
-        # >= 0, <= 1, and in Z.
-        #greater_than = [5, NaN, 0, 0, 0]
-        #less_than = [NaN, 3, 50, 1, 1]
-        #integer = [true, false, false, true, true]
-        #zero_one = [NaN, NaN, NaN, 1, 1]
+        # Test no objective function represented as all indices zero:
+        @test lp2.c == fill(0, 8)
+        @test lp2.obj_constant == 0
         
         @test length(lp2.var_to_name) == 8
 
@@ -116,31 +110,26 @@ using LinearAlgebra
                 @test_throws KeyError lp2.less_than[index]
                 @test lp2.integer[index]
                 @test_throws KeyError lp2.equal_to[index]
-                #@test isnan(lp2.zero_one[index.value])
             elseif (name == "y")
                 @test_throws KeyError lp2.greater_than[index]
                 @test lp2.less_than[index] == 3
                 @test_throws KeyError lp2.integer[index]
                 @test_throws KeyError lp2.equal_to[index]
-                #@test isnan(lp2.zero_one[index.value])
             elseif (name == "z")
                 @test lp2.greater_than[index] == 0
                 @test lp2.less_than[index] == 50
                 @test_throws KeyError lp2.integer[index]
                 @test_throws KeyError lp2.equal_to[index]
-                #@test isnan(lp2.zero_one[index.value])
             elseif (name == "a[1]")
                 @test lp2.greater_than[index] == 0
                 @test lp2.less_than[index] == 1
                 @test lp2.integer[index]
                 @test_throws KeyError lp2.equal_to[index]
-                #@test lp2.zero_one[index.value] == 1
             elseif (name == "a[2]")
                 @test lp2.greater_than[index] == 0
                 @test lp2.less_than[index] == 1
                 @test lp2.integer[index]
                 @test_throws KeyError lp2.equal_to[index]
-                #@test lp2.zero_one[index.value] == 1
             elseif (name == "t")
                 @test_throws KeyError lp2.greater_than[index]
                 @test_throws KeyError lp2.less_than[index]
@@ -269,7 +258,7 @@ using LinearAlgebra
         @constraint(model5, x >= 5)
         @constraint(model5, x <= 6)
         @constraint(model5, x >= -3)
-        # After this, x should be equal to 5, and no  matrix A
+        # After this, x should be equal to 5, and no matrix A
 
         lp5 = LPRep(model5)
         @test isempty(lp5.A)
@@ -534,6 +523,18 @@ using LinearAlgebra
 
     end
 
+
+
+    @testset "algorithms.jl" begin
+        
+        # Test constructing difference constraint with and without limit
+        diff_const = DifferenceConstraints()
+        @test isnothing(diff_const.limit)
+        diff_const2 = DifferenceConstraints(3000)
+        @test diff_const2.limit == 3000
+
+    end
+
     @testset "interface.jl" begin
         # TODO: Test solved with regular optimizer and a vector of different elements
         # for vector, we will perhaps need to group algorithms together and return an AlgoModel,
@@ -547,7 +548,14 @@ using LinearAlgebra
         @constraint(model1, 3x+y <= 5)
         @objective(model1, Max, x+y+z)
 
-
+        # Test nothing set
+        algoModel0 = AlgoModel()
+        @test !is_model_set(algoModel0)
+        @test !is_rep_set(algoModel0)
+        @test !are_algorithms_set(algoModel0)
+        @test algoModel0.status == TerminationStatus(0)
+        @test !got_answer(algoModel0)
+        
         # Test no representation set, or no algorithm set.
         algoModel1 = AlgoModel(model1)
         @test !are_algorithms_set(algoModel1)
@@ -555,16 +563,12 @@ using LinearAlgebra
         @test algoModel1.status == TerminationStatus(0)
         @test !got_answer(algoModel1)
 
-        # Same if optimize together with model
-        SolverPeeker.optimize!(model1, algoModel1)
-        @test algoModel1.status == TerminationStatus(0)
-        @test !got_answer(algoModel1)
-
         # Add algorithm and check termination, unknown. 
         # Also check no double addition of algorithm
-        add_algorithm!(algoModel1, DifferenceConstraints())
-        add_algorithms!(algoModel1, [DifferenceConstraints()])
-        @test algoModel1.algorithms == [DifferenceConstraints()]
+        diff_const = DifferenceConstraints()
+        add_algorithm!(algoModel1, diff_const)
+        add_algorithms!(algoModel1, [diff_const])
+        @test algoModel1.algorithms == [diff_const]
         @test are_algorithms_set(algoModel1)
         SolverPeeker.optimize!(algoModel1)
         @test algoModel1.status == TerminationStatus(1)
@@ -574,15 +578,23 @@ using LinearAlgebra
         # Nothing happens if no model is set either
         algoModel2 = AlgoModel(DifferenceConstraints())
         @test !is_rep_set(algoModel2)
+        @test !is_model_set(algoModel2)
         SolverPeeker.optimize!(algoModel2)
         @test algoModel2.status == TerminationStatus(0)
         @test !got_answer(algoModel2)
 
         set_rep!(algoModel2, model1)
+        @test is_model_set(algoModel2)
         @test is_rep_set(algoModel2)
         SolverPeeker.optimize!(algoModel2)
-        @test algoModel1.status == TerminationStatus(1)
-        @test !got_answer(algoModel1)
+        @test algoModel2.status == TerminationStatus(1)
+        @test !got_answer(algoModel2)
+
+        # Test that an optimizer can be set, and new solver_name method
+        @test SolverPeeker.solver_name(algoModel2) == "No optimizer attached."
+        @test SolverPeeker.set_optimizer(algoModel2, GLPK.Optimizer) == true
+        @test SolverPeeker.solver_name(algoModel2) == "GLPK"
+
 
 
     end
@@ -603,7 +615,7 @@ using LinearAlgebra
         @constraint(model1, x1-x2 <= 0)
         @constraint(model1, x1-x5 <= -1)
         @constraint(model1, x2-x5 <= -1) 
-        @constraint(model1, x2-x5 <= -1.3) # Add stricter and check that this is used in the algorithm
+        @constraint(model1, x2-x5 <= -1.299999) # Add stricter and check that this is used in the algorithm
         @constraint(model1, x2-x5 <= -0.5) # Add less strict, and check that this is not used in the algorithm
         @constraint(model1, 2x3-2x1 <= 14)
         @constraint(model1, x4-x1 <= 6)
@@ -613,11 +625,11 @@ using LinearAlgebra
 
         algoModel1 = AlgoModel(model1)
         # Test comes to a decision:
-        @test SolverPeeker.optimize!(algoModel1, DifferenceConstraints()) == true
+        @test SolverPeeker.optimize!(algoModel1, DifferenceConstraints(10)) == true
         @test algoModel1.status == TerminationStatus(4)
         # Test correct solution
         solution = algoModel1.solution
-        sol = [-6, -5.3, 0, -1, -4]
+        sol = [-6, -5.299999, 0, -1, -4]
         @test solution.primal_status == SolutionStatus(2)
         @test issetequal(solution.x, sol)
         @test solution.objective_value == dot(sol, [1, 1, -5, 2, 6]) + 4
@@ -628,11 +640,32 @@ using LinearAlgebra
         name_to_var = Dict(value => key for (key, value) in algoModel1.rep.var_to_name)
         x = solution.x
         @test x[name_to_var["x1"]] == -6
-        @test x[name_to_var["x2"]] == -5.3
+        @test x[name_to_var["x2"]] == -5.299999
         @test x[name_to_var["x3"]] == 0
         @test x[name_to_var["x4"]] == -1
         @test x[name_to_var["x5"]] == -4
 
+
+        # Test same but without objective value:
+        model1 = Model()
+        @variable(model1, x1, Int)
+        @variable(model1, x2)
+        @variable(model1, x3, Int)
+        @variable(model1, x4, Int)
+        @variable(model1, x5, Int)
+        @constraint(model1, x1-x2 <= 0)
+        @constraint(model1, x1-x5 <= -1)
+        @constraint(model1, x2-x5 <= -1.299999)
+        @constraint(model1, 2x3-2x1 <= 14)
+        @constraint(model1, x4-x1 <= 6)
+        @constraint(model1, 2x4-2x3 <= -2)
+        @constraint(model1, x5-x3 <= -3)
+        @constraint(model1, x5-x4 <= -2.5)
+
+        algoModel1 = AlgoModel(model1)
+        SolverPeeker.optimize!(algoModel1, DifferenceConstraints(10))
+        solution = algoModel1.solution
+        @test solution.objective_value == 0
 
         # Test infeasible
         model2 = Model()
@@ -686,8 +719,7 @@ using LinearAlgebra
         @test isnothing(solution.algorithm_used)
 
 
-        # Test on the edge of being feasible vs negative cycle
-        # Negative cycle
+        # Test negative cycle, mixed integers, does not know, so limit on iterations is reached:
         model5 = Model()
         @variable(model5, x1)
         @variable(model5, x2, Int)
@@ -706,10 +738,34 @@ using LinearAlgebra
 
         algoModel5 = AlgoModel(model5)
 
+        @test SolverPeeker.optimize!(algoModel5, DifferenceConstraints()) == false
+        @test algoModel5.status == TerminationStatus(6)
+        @test algoModel5.solution.primal_status == SolutionStatus(0)
+
+
+        # Test negative cycle, all integers, infeasible:
+        model5 = Model()
+        @variable(model5, x1, Int)
+        @variable(model5, x2, Int)
+        @variable(model5, x3, Int)
+        @variable(model5, x4, Int)
+        @variable(model5, x5 , Int)
+        @variable(model5, x6 == 0, Int)
+        @constraint(model5, x1-x2 <= 0)
+        @constraint(model5, x1-x5 <= -1.2)
+        @constraint(model5, x2-x5 <= 1)
+        @constraint(model5, x3-x1 <= 5.4)
+        @constraint(model5, x4-x1 <= 4.2)
+        @constraint(model5, x4-x3 <= -1.3)
+        @constraint(model5, x5-x3 <= -3)
+        @constraint(model5, x5-x4 <= -3)
+
+        algoModel5 = AlgoModel(model5)
+
         @test SolverPeeker.optimize!(algoModel5, DifferenceConstraints()) == true
         @test algoModel5.status == TerminationStatus(3)
+        @test algoModel5.solution.primal_status == SolutionStatus(3)
 
-        @test typeof(algoModel5.solution.algorithm_used) == typeof(DifferenceConstraints())
 
 
         # Feasible, cycle adjusted to 0
@@ -729,6 +785,7 @@ using LinearAlgebra
         @constraint(model5, x5-x3 <= -3)
         @constraint(model5, x5-x4 <= -3)
 
+
         algoModel5 = AlgoModel(model5)
 
         @test SolverPeeker.optimize!(algoModel5, DifferenceConstraints()) == true
@@ -740,6 +797,66 @@ using LinearAlgebra
         @test issetequal(solution.x, sol)
 
         @test typeof(solution.algorithm_used) == typeof(DifferenceConstraints())
+
+
+        # Test negative cycle, while still solution if more than 4n iterations:
+        model5 = Model()
+        @variable(model5, x1)
+        @variable(model5, x2)
+        @variable(model5, x3)
+        @variable(model5, x4)
+        @variable(model5, x5)
+        @variable(model5, y1, Int)
+        @variable(model5, y2, Int)
+        @variable(model5, y3, Int)
+        @constraint(model5, x2-x1 <= -1.1)
+        @constraint(model5, x2-y1 <= -0.4)
+        @constraint(model5, x2-x3 <= 0)
+        @constraint(model5, y1-x2 <= 1.2)
+        @constraint(model5, x3-x2 <= 0)
+        @constraint(model5, x3-x4 <= 0)
+        @constraint(model5, x4-x3 <= 0)
+        @constraint(model5, x4-x5 <= 0)
+        @constraint(model5, x5-x4 <= 0)
+        @constraint(model5, x5-y2 <= -0.3)
+        @constraint(model5, x5-y3 <= -0.5)
+        @constraint(model5, y2-x5 <= 1)
+        @constraint(model5, y3-x5 <= 1.35)
+        
+        algoModel5 = AlgoModel(model5)
+
+        # Not enough iterations to know
+        @test SolverPeeker.optimize!(algoModel5, DifferenceConstraints()) == false
+
+        # Should stabilize
+        @test SolverPeeker.optimize!(algoModel5, DifferenceConstraints(40)) == true
+        name_to_var = Dict(value => key for (key, value) in algoModel5.rep.var_to_name)
+        x = algoModel5.solution.x
+        @test x[name_to_var["x3"]] == -1.5
+
+
+        # Another example with a negative cycle.
+        model5 = Model()
+        @variable(model5, v1)
+        @variable(model5, v2)
+        @variable(model5, v3)
+        @variable(model5, v4)
+        @variable(model5, v5)
+        @variable(model5, v6, Int)
+        @constraint(model5, v2-v1 <= -0.1)
+        @constraint(model5, v2-v6 <= 0)
+        @constraint(model5, v3-v2 <= -0.1)
+        @constraint(model5, v4-v3 <= -0.2)
+        @constraint(model5, v5-v4 <= -0.3)
+        @constraint(model5, v6-v5 <= 0.6)
+
+         # Not enough iterations to know
+         @test SolverPeeker.optimize!(algoModel5, DifferenceConstraints()) == false
+
+         @test SolverPeeker.optimize!(algoModel5, DifferenceConstraints(12)) == true
+         solution = algoModel5.solution
+        @test solution.primal_status == SolutionStatus(2)
+    
 
 
         """ Moving solution """
@@ -863,10 +980,10 @@ using LinearAlgebra
         # Test split where not feasible
         model5 = Model()
         @variable(model5, x1 <= 0)
-        @variable(model5, x2 >= 0, Int)
+        @variable(model5, x2 >= 0)
         @variable(model5, x3 <= 0)
         @variable(model5, x4 >= 0)
-        @variable(model5, x5 >= 0, Int)
+        @variable(model5, x5 >= 0)
         @variable(model5, x6 == 0)
         @constraint(model5, x1-x2 <= 0)
         @constraint(model5, x1-x5 <= -1.2)
@@ -1076,9 +1193,6 @@ using LinearAlgebra
         @test SolverPeeker.optimize!(algoModel6, DifferenceConstraints()) == false
         @test algoModel6.status == TerminationStatus(1)
         @test typeof(algoModel6.solution.algorithm_used) == Nothing
-
-
-
     end
 
 

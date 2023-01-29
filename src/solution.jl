@@ -42,6 +42,8 @@ Solution() = Solution(
     function set_solution!(solution, primal_status, x, objective_value, algorithm_used)
         solution.primal_status = primal_status
         solution.x = x
-        solution.objective_value = objective_value
+        if !isnothing(objective_value) 
+            solution.objective_value = objective_value
+        end
         solution.algorithm_used = algorithm_used
     end

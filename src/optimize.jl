@@ -9,12 +9,22 @@ export optimize!
 
 
 # Helper functions:
-# TODO: move to other file later
+function valid_single_variable_bounds(rep)
+    less = rep.less_than
+    greater = rep.greater_than
+
+    # If not empty, check if same element is everywhere in these dicts, and if not return
+    common = union(values(less), values(greater))
+    if !isempty(common) && length(union(values(less), values(greater))) != 1
+        return false
+    end
+    return true
+end
 
 
 
 # Assumes algoModel or similar fields
-function optimize!(model::AlgoModel, ::DifferenceConstraints)
+function optimize!(model::AlgoModel, difference_constraint::DifferenceConstraints)
     rep = model.rep
     less = rep.less_than
     greater = rep.greater_than
@@ -23,7 +33,6 @@ function optimize!(model::AlgoModel, ::DifferenceConstraints)
     # Look at what requirement the variables have.
     # At this point we do not support differenet SingleVariable bounds.
     # All should be less than, or greater than, the same constant (typically zero).
-    # TODO: Write in documentation.
 
     # If not empty, check if same elemnent is everywhere in these dicts, and if not return
     common = union(values(less), values(greater))
@@ -32,6 +41,7 @@ function optimize!(model::AlgoModel, ::DifferenceConstraints)
         model.solution.primal_status = Sln_Unknown
         return false
     end
+    
 
     # See if DifferenceConstraints are recognized, if not, return false
     recognized, b = recognize(model, DifferenceConstraints())
@@ -43,7 +53,6 @@ function optimize!(model::AlgoModel, ::DifferenceConstraints)
     end
 
 
-
     # Make the constraint graph
     At = rep.At
     nzval = At.nzval
@@ -51,8 +60,8 @@ function optimize!(model::AlgoModel, ::DifferenceConstraints)
     rowval = At.rowval
     variable_count = rep.var_count
     constraint_count = rep.con_count
-
-        
+    
+    
     # Directed graph with weights
     graph = SimpleWeightedDiGraph(variable_count)
 
@@ -114,7 +123,7 @@ function optimize!(model::AlgoModel, ::DifferenceConstraints)
         
     # Solve with adjusted Bellman-Ford
     try  
-        dists = bellman_ford_adjusted(graph, Graphs.LinAlg.adjacency_matrix(graph), keys(model.rep.integer))
+        dists = bellman_ford_adjusted(graph, Graphs.LinAlg.adjacency_matrix(graph), keys(model.rep.integer), difference_constraint.limit)
 
         # Adjust solution so that it fits with SingleVariable bounds
         if !isempty(common)
@@ -233,7 +242,7 @@ function optimize!(model::AlgoModel, ::DifferenceConstraints)
         set_solution!(model.solution, 
                     Sln_FeasiblePoint, 
                     dists, 
-                    dot(model.rep.c, dists) + model.rep.obj_constant, 
+                    dot(model.rep.c, dists) + model.rep.obj_constant,
                     DifferenceConstraints())
 
         return true
@@ -250,6 +259,10 @@ function optimize!(model::AlgoModel, ::DifferenceConstraints)
                     DifferenceConstraints())
 
             return true
+        elseif isa(error, CannotKnowError)
+            model.status = Trm_IterationLimit
+            model.solution.primal_status = Sln_Unknown  
+            return false
         else
             model.status = Trm_Unknown  
             model.solution.primal_status = Sln_Unknown  
@@ -258,7 +271,3 @@ function optimize!(model::AlgoModel, ::DifferenceConstraints)
         end
     end
 end
-
-
-
-
