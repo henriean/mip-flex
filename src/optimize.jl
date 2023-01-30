@@ -44,14 +44,13 @@ function optimize!(model::AlgoModel, difference_constraint::DifferenceConstraint
     
 
     # See if DifferenceConstraints are recognized, if not, return false
-    recognized, b = recognize(model, DifferenceConstraints())
+    recognized, b, constraint_numbers = recognize(model, DifferenceConstraints())
 
     if !recognized
         model.status = Trm_Unknown
         model.solution.primal_status = Sln_Unknown
         return false
     end
-
 
     # Make the constraint graph
     At = rep.At
@@ -60,8 +59,16 @@ function optimize!(model::AlgoModel, difference_constraint::DifferenceConstraint
     rowval = At.rowval
     variable_count = rep.var_count
     constraint_count = rep.con_count
-    
-    
+
+    # Indicating whether only subproblem was difference constraints, or if the whole problem was
+    infeasible_test = false
+
+    # If not all constraints are difference constraints, flag it as infeasibility test.
+    number_of_edges = length(constraint_numbers)
+    if constraint_count != number_of_edges
+        infeasible_test = true
+    end
+
     # Directed graph with weights
     graph = SimpleWeightedDiGraph(variable_count)
 
@@ -69,8 +76,8 @@ function optimize!(model::AlgoModel, difference_constraint::DifferenceConstraint
     # Add edges and distances to the graph
     # Only the recent edge is stored, so use the strictest edge!
     # Go through each constraint
-    for k in 1:constraint_count
-        # Row k
+    for k in constraint_numbers
+
         values = nzval[colptr[k]:colptr[k+1]-1]
 
         # The graph does not store zero edges, so
@@ -237,6 +244,27 @@ function optimize!(model::AlgoModel, difference_constraint::DifferenceConstraint
             dists[key] = value
         end
 
+
+        # If only a subproblem, either it fits the other constraints, and we are good, or we cannot know in an easy way
+        if infeasible_test
+            constraints_left = setdiff([a for a in 1:constraint_count], constraint_numbers)
+            for j in constraints_left
+                left_hand_side = 0
+                values = nzval[colptr[j]:colptr[j+1]-1]
+                for i in eachindex(values)
+                    variable_index = rowval[colptr[j]-1 + i]
+                    left_hand_side += dists[variable_index]*values[i]
+                end
+                # If constraint does not hold, we do not know
+                if left_hand_side > b[j]
+                    model.status = Trm_Unknown
+                    model.solution.primal_status = Sln_Unknown  
+                    return false
+                end
+            end
+        end
+
+        
         # TODO: Be sure not only one solution
         model.status = Trm_DualInfeasible
         set_solution!(model.solution, 

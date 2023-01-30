@@ -450,7 +450,10 @@ using LinearAlgebra
         algoModel1 =AlgoModel(model1, DifferenceConstraints())
         @test size(algoModel1.algorithms) === (1,)
         @test typeof(algoModel1.algorithms[1]) == DifferenceConstraints
-        @test recognize(algoModel1, DifferenceConstraints()) == (true, algoModel1.rep.b)
+        (bool, b, constraints) = recognize(algoModel1, DifferenceConstraints())
+        @test bool == true
+        @test b == algoModel1.rep.b
+        @test issetequal(constraints, [1,2,3,4,5])
 
         # Add non-normalized constraint and get true
         @constraint(model1, -4x+4z <= 8)
@@ -458,17 +461,37 @@ using LinearAlgebra
         algoModel1 =AlgoModel(model1)   # Just using different instantiation
         @test algoModel1.algorithms === nothing
         
-        result, b1 = recognize(algoModel1, DifferenceConstraints())
+        bool, b1, constraints = recognize(algoModel1, DifferenceConstraints())
         # Add 2, since 8/4 when nbormalizing is 2:
         b_true = [3,-5,-7,2,-3,2]
-        @test result == true
+        @test bool == true
         @test issetequal(b1, b_true)
+        @test issetequal(constraints, [1,2,3,4,5,6])
 
-        # Add a non-difference constraint, and get false
+        # Add a non-difference constraint, and get a subset recognized
         @constraint(model1, x+z <= -3)
 
         algoModel1 =AlgoModel(model1, DifferenceConstraints())
-        @test recognize(algoModel1, DifferenceConstraints()) === (false, nothing)
+        (bool, b, constraints) = recognize(algoModel1, DifferenceConstraints())
+        @test bool == true
+        @test issetequal(b, b_true)
+        @test issetequal(constraints, [1,2,3,4,5,7]) # Saved differently when made
+        # Test that constraint 6 is the one without a difference constraint
+        At = algoModel1.rep.At
+        @test issetequal(At.nzval[At.colptr[6]:At.colptr[6+1]-1], [1,1])
+
+
+        # Test a model with no difference constraints returns false:
+        model11 = Model()
+        @variable(model11, x>=0, Int)
+        @variable(model11, y, Int)
+        @variable(model11, z, Int)
+        @objective(model11, Min, x-2y-z)
+        @constraint(model11, x-y+z <= 3)
+        @constraint(model11, -5z+2y <= -5)
+
+        algoModel11 =AlgoModel(model11, DifferenceConstraints())
+        @test recognize(algoModel11, DifferenceConstraints()) === (false, nothing, nothing)
 
 
         # Test that model with only one variable will return false
@@ -478,7 +501,7 @@ using LinearAlgebra
         @constraint(model2, x-4 <= 9)
 
         algoModel2 = AlgoModel(model2)
-        @test recognize(algoModel2, DifferenceConstraints()) === (false, nothing)
+        @test recognize(algoModel2, DifferenceConstraints()) === (false, nothing, nothing)
 
         # Test if no constraints return false
         model3 = Model()
@@ -488,7 +511,7 @@ using LinearAlgebra
         @objective(model3, Max, x+y+z)
 
         algoModel3 = AlgoModel(model3)
-        @test recognize(algoModel3, DifferenceConstraints()) === (false, nothing)
+        @test recognize(algoModel3, DifferenceConstraints()) === (false, nothing, nothing)
 
 
 
@@ -663,9 +686,41 @@ using LinearAlgebra
         @constraint(model1, x5-x4 <= -2.5)
 
         algoModel1 = AlgoModel(model1)
-        SolverPeeker.optimize!(algoModel1, DifferenceConstraints(10))
+        @test SolverPeeker.optimize!(algoModel1, DifferenceConstraints(10)) == true
+        @test algoModel1.status == TerminationStatus(4)
+        @test solution.primal_status == SolutionStatus(2)
         solution = algoModel1.solution
         @test solution.objective_value == 0
+        @test issetequal(solution.x, sol)
+
+
+        # Test when difference constraint subproblem solution holds for other inequalities
+        @constraint(model1, x1+x4+x5 <= -10.5)
+        @variable(model1, x6, Int)
+        @constraint(model1, x6+x3 >= -1)
+
+        algoModel1 = AlgoModel(model1)
+        SolverPeeker.optimize!(algoModel1, DifferenceConstraints(10)) == true
+        @test algoModel1.status == TerminationStatus(4)
+        @test solution.primal_status == SolutionStatus(2)
+        solution = algoModel1.solution
+        @test solution.objective_value == 0
+        sol = [-6, -5.299999, 0, -1, -4, 0]
+        @test issetequal(solution.x, sol)
+
+        # Test cannot know, when an additional that does not hold for the solution is added
+        @constraint(model1, 2x4+x5 <= -7)
+
+        algoModel1 = AlgoModel(model1)
+        @test SolverPeeker.optimize!(algoModel1, DifferenceConstraints()) == false
+        @test algoModel1.status == TerminationStatus(1)
+
+        solution = algoModel1.solution
+        @test solution.primal_status == SolutionStatus(0)
+        @test isnothing(solution.x)
+        @test isnothing(solution.objective_value)
+        @test isnothing(solution.algorithm_used)
+
 
         # Test infeasible
         model2 = Model()
@@ -694,16 +749,29 @@ using LinearAlgebra
         @test typeof(solution.algorithm_used) == typeof(DifferenceConstraints())
 
 
+        # Test infesible subproblem leads to still infeasible by adding non-difference constraints:
+        @constraint(model2, x+z-y <= 3)
+
+        algoModel2 = AlgoModel(model2)
+
+        # Test comes to a decision:
+        @test SolverPeeker.optimize!(algoModel2, DifferenceConstraints()) == true
+        @test algoModel2.status == TerminationStatus(3)
+
+        solution = algoModel2.solution
+        @test solution.primal_status == SolutionStatus(3)
+        @test isnothing(solution.x)
+        @test isnothing(solution.objective_value)
+        @test typeof(solution.algorithm_used) == typeof(DifferenceConstraints())
+
+
         # Test not recognizeable
         model3 = Model()
         @variable(model3, x>=0)
         @variable(model3, y)
         @variable(model3, z)
         @objective(model3, Min, x-2y-z)
-        @constraint(model3, x-y <= 3)
-        @constraint(model3, -z+y <= -5)
-        @constraint(model3, x-y >= 7)
-        @constraint(model3, z-x <= 2)
+        @constraint(model3, x-y+z <= 3)
         @constraint(model3, 2x-z <= -3)
         @constraint(model3, z >= 0)
 
