@@ -36,27 +36,26 @@ function optimize!(model::AlgoModel, difference_constraint::DifferenceConstraint
 
     # If not empty, check if same elemnent is everywhere in these dicts, and if not return
     common = union(values(less), values(greater))
-    if !isempty(common) && length(union(values(less), values(greater))) != 1
-        model.status = Trm_Unknown
-        model.solution.primal_status = Sln_Unknown
+    if !isempty(common) && length(common) != 1
+        set_trm_status!(model, Trm_Unknown)
+        set_sln_status!(model, Sln_Unknown)
         return false
     end
     
 
     # See if DifferenceConstraints are recognized, if not, return false
-    recognized, b, constraint_numbers = recognize(model, DifferenceConstraints())
+    recognized, b, constraint_numbers = recognize(model, difference_constraint)
 
     if !recognized
-        model.status = Trm_Unknown
-        model.solution.primal_status = Sln_Unknown
+        set_trm_status!(model, Trm_Unknown)
+        set_sln_status!(model, Sln_Unknown)
         return false
     end
 
     # Make the constraint graph
     At = rep.At
-    nzval = At.nzval
-    colptr = At.colptr
-    rowval = At.rowval
+    all_values = nonzeros(At)
+    all_rows = rowvals(At)
     variable_count = rep.var_count
     constraint_count = rep.con_count
 
@@ -78,7 +77,8 @@ function optimize!(model::AlgoModel, difference_constraint::DifferenceConstraint
     # Go through each constraint
     for k in constraint_numbers
 
-        values = nzval[colptr[k]:colptr[k+1]-1]
+        values = all_values[collect(nzrange(At, k))]
+        rows = all_rows[collect(nzrange(At, k))]
 
         # The graph does not store zero edges, so
         # store them as a very small number.
@@ -90,9 +90,9 @@ function optimize!(model::AlgoModel, difference_constraint::DifferenceConstraint
         # since only b normalized.
 
         i = findall(x->x<=-1, values)[1]
-        i = rowval[colptr[k]-1 + i]
+        i = rows[i]
         j = findall(x->x>=1, values)[1]
-        j = rowval[colptr[k]-1 + j]
+        j = rows[j]
 
         # Add edge with weight to graph if it's stricter
         if Graphs.has_edge(graph, i, j)
@@ -178,12 +178,12 @@ function optimize!(model::AlgoModel, difference_constraint::DifferenceConstraint
                     if (value - delta) < max_B
                         if !isempty(rep.integer)
                             # Infeasible
-                            model.status = Trm_PrimalInfeasible
-                            set_solution!(model.solution, 
+                            set_trm_status!(model, Trm_Infeasibility)
+                            set_solution!(model, 
                                     Sln_Infeasible, 
                                     nothing, 
                                     nothing, 
-                                    DifferenceConstraints())
+                                    difference_constraint)
                             return true
                         end
 
@@ -201,12 +201,12 @@ function optimize!(model::AlgoModel, difference_constraint::DifferenceConstraint
                     if (value + delta) > min_A
                         if !isempty(rep.integer)
                             # Infeasible
-                            model.status = Trm_PrimalInfeasible
-                            set_solution!(model.solution, 
+                            set_trm_status!(model, Trm_Infeasibility)
+                            set_solution!(model, 
                                     Sln_Infeasible, 
                                     nothing, 
                                     nothing, 
-                                    DifferenceConstraints())
+                                    difference_constraint)
                             return true
                         end
 
@@ -250,15 +250,14 @@ function optimize!(model::AlgoModel, difference_constraint::DifferenceConstraint
             constraints_left = setdiff([a for a in 1:constraint_count], constraint_numbers)
             for j in constraints_left
                 left_hand_side = 0
-                values = nzval[colptr[j]:colptr[j+1]-1]
-                for i in eachindex(values)
-                    variable_index = rowval[colptr[j]-1 + i]
-                    left_hand_side += dists[variable_index]*values[i]
+                for i in nzrange(At, j)
+                    variable_index = all_rows[i]
+                    left_hand_side += dists[variable_index]*all_values[i]
                 end
                 # If constraint does not hold, we do not know
                 if left_hand_side > b[j]
-                    model.status = Trm_Unknown
-                    model.solution.primal_status = Sln_Unknown  
+                    set_trm_status!(model, Trm_Unknown)
+                    set_sln_status!(model, Sln_Unknown)
                     return false
                 end
             end
@@ -266,12 +265,12 @@ function optimize!(model::AlgoModel, difference_constraint::DifferenceConstraint
 
         
         # TODO: Be sure not only one solution
-        model.status = Trm_DualInfeasible
-        set_solution!(model.solution, 
+        set_trm_status!(model, Trm_Feasibility)
+        set_solution!(model, 
                     Sln_FeasiblePoint, 
                     dists, 
                     dot(model.rep.c, dists) + model.rep.obj_constant,
-                    DifferenceConstraints())
+                    difference_constraint)
 
         return true
 
@@ -279,21 +278,21 @@ function optimize!(model::AlgoModel, difference_constraint::DifferenceConstraint
         if isa(error, Graphs.NegativeCycleError)
             # Update no feasible solution
             # TODO: Not sure if dual infeasible or not. Check results?
-            model.status = Trm_PrimalInfeasible
-            set_solution!(model.solution, 
+            set_trm_status!(model, Trm_Infeasibility)
+            set_solution!(model, 
                     Sln_Infeasible, 
                     nothing, 
                     nothing, 
-                    DifferenceConstraints())
+                    difference_constraint)
 
             return true
         elseif isa(error, CannotKnowError)
-            model.status = Trm_IterationLimit
-            model.solution.primal_status = Sln_Unknown  
+            set_trm_status!(model, Trm_IterationLimit)
+            set_sln_status!(model, Sln_Unknown)
             return false
         else
-            model.status = Trm_Unknown  
-            model.solution.primal_status = Sln_Unknown  
+            set_trm_status!(model, Trm_Unknown) 
+            set_sln_status!(model, Sln_Unknown)
             throw(error)
             return false
         end

@@ -9,6 +9,7 @@ using LinearAlgebra
 
 # Start writing tests here, then divide into seperate files
 
+# TODO: Test variable_count equals columns in A!
 
 @testset "main" begin
 
@@ -34,12 +35,15 @@ using LinearAlgebra
 
 
         """ Test objective vector will be zero in LPRep if no objective is set """
+        # Also sense wil be feasibility
         model02 = Model()
         @variable(model02, x <= 0)
         @variable(model02, y <= 0)
         @constraint(model02, y + x <= 6)
 
-        @test issetequal(LPRep(model02).c, [0, 0])
+        lp02 = LPRep(model02)
+        @test issetequal(lp02.c, [0, 0])
+        @test lp02.sense == MOI.FEASIBILITY_SENSE
 
 
         """ Test getting correct A, b and c matrix up to set equality. """
@@ -79,6 +83,7 @@ using LinearAlgebra
         # objective should remain the same.
         @test issetequal(lp.c, obj)
         @test lp.obj_constant == 2
+        @test lp.sense == MOI.MAX_SENSE
 
 
         """ Test getting of variables, with correct variable indices. """
@@ -162,8 +167,11 @@ using LinearAlgebra
 
         lp3 = LPRep(model3)
 
+        # Test min sense
+        @test lp3.sense == MOI.MIN_SENSE
+
         # No constraints into A
-        @test lp3.A == sparse([],[],[])
+        @test iszero(lp3.A)
         # Updated bound on x, but not y
         for (index, name) in lp3.var_to_name
             if name == "x"
@@ -247,7 +255,7 @@ using LinearAlgebra
         # Test that optimize on an AlgoModel with inconsistency updated correctly
         algoModel4 = AlgoModel(model4)
         optimize!(algoModel4)
-        @test algoModel4.status == TerminationStatus(3)
+        @test algoModel4.status == TerminationStatus(7)
         @test algoModel4.solution.primal_status == SolutionStatus(3)
         @test isnothing(algoModel4.solution.algorithm_used)
 
@@ -261,8 +269,8 @@ using LinearAlgebra
         # After this, x should be equal to 5, and no matrix A
 
         lp5 = LPRep(model5)
-        @test isempty(lp5.A)
-        @test isempty(lp5.At)
+        @test iszero(lp5.A)
+        @test iszero(lp5.At)
         @test isempty(lp5.b)
         name_to_var = Dict(value => key for (key, value) in lp5.var_to_name)
         @test lp5.equal_to[name_to_var["x"]] == 5
@@ -478,7 +486,8 @@ using LinearAlgebra
         @test issetequal(constraints, [1,2,3,4,5,7]) # Saved differently when made
         # Test that constraint 6 is the one without a difference constraint
         At = algoModel1.rep.At
-        @test issetequal(At.nzval[At.colptr[6]:At.colptr[6+1]-1], [1,1])
+        all_values = nonzeros(At)
+        @test issetequal(all_values[collect(nzrange(At, 6))], [1,1])
 
 
         # Test a model with no difference constraints returns false:
@@ -649,7 +658,7 @@ using LinearAlgebra
         algoModel1 = AlgoModel(model1)
         # Test comes to a decision:
         @test SolverPeeker.optimize!(algoModel1, DifferenceConstraints(10)) == true
-        @test algoModel1.status == TerminationStatus(4)
+        @test algoModel1.status == TerminationStatus(6)
         # Test correct solution
         solution = algoModel1.solution
         sol = [-6, -5.299999, 0, -1, -4]
@@ -687,7 +696,7 @@ using LinearAlgebra
 
         algoModel1 = AlgoModel(model1)
         @test SolverPeeker.optimize!(algoModel1, DifferenceConstraints(10)) == true
-        @test algoModel1.status == TerminationStatus(4)
+        @test algoModel1.status == TerminationStatus(6)
         @test solution.primal_status == SolutionStatus(2)
         solution = algoModel1.solution
         @test solution.objective_value == 0
@@ -700,8 +709,8 @@ using LinearAlgebra
         @constraint(model1, x6+x3 >= -1)
 
         algoModel1 = AlgoModel(model1)
-        SolverPeeker.optimize!(algoModel1, DifferenceConstraints(10)) == true
-        @test algoModel1.status == TerminationStatus(4)
+        @test SolverPeeker.optimize!(algoModel1, DifferenceConstraints(10)) == true
+        @test algoModel1.status == TerminationStatus(6)
         @test solution.primal_status == SolutionStatus(2)
         solution = algoModel1.solution
         @test solution.objective_value == 0
@@ -740,7 +749,7 @@ using LinearAlgebra
         # Test comes to a decision:
         @test SolverPeeker.optimize!(algoModel2, DifferenceConstraints()) == true
         #@test SolverPeeker.optimize!(model2, DifferenceConstraints()) == true
-        @test algoModel2.status == TerminationStatus(3)
+        @test algoModel2.status == TerminationStatus(7)
 
         solution = algoModel2.solution
         @test solution.primal_status == SolutionStatus(3)
@@ -756,7 +765,7 @@ using LinearAlgebra
 
         # Test comes to a decision:
         @test SolverPeeker.optimize!(algoModel2, DifferenceConstraints()) == true
-        @test algoModel2.status == TerminationStatus(3)
+        @test algoModel2.status == TerminationStatus(7)
 
         solution = algoModel2.solution
         @test solution.primal_status == SolutionStatus(3)
@@ -807,7 +816,7 @@ using LinearAlgebra
         algoModel5 = AlgoModel(model5)
 
         @test SolverPeeker.optimize!(algoModel5, DifferenceConstraints()) == false
-        @test algoModel5.status == TerminationStatus(6)
+        @test algoModel5.status == TerminationStatus(8)
         @test algoModel5.solution.primal_status == SolutionStatus(0)
 
 
@@ -831,7 +840,7 @@ using LinearAlgebra
         algoModel5 = AlgoModel(model5)
 
         @test SolverPeeker.optimize!(algoModel5, DifferenceConstraints()) == true
-        @test algoModel5.status == TerminationStatus(3)
+        @test algoModel5.status == TerminationStatus(7)
         @test algoModel5.solution.primal_status == SolutionStatus(3)
 
 
@@ -844,6 +853,7 @@ using LinearAlgebra
         @variable(model5, x4)
         @variable(model5, x5 , Int)
         @variable(model5, x6 == 0)
+        @objective(model5, Max, x1+x2-x3-x4-52)
         @constraint(model5, x1-x2 <= 0)
         @constraint(model5, x1-x5 <= -1.2)
         @constraint(model5, x2-x5 <= 1)
@@ -857,12 +867,13 @@ using LinearAlgebra
         algoModel5 = AlgoModel(model5)
 
         @test SolverPeeker.optimize!(algoModel5, DifferenceConstraints()) == true
-        @test algoModel5.status == TerminationStatus(4)
+        @test algoModel5.status == TerminationStatus(6)
 
         solution = algoModel5.solution
         @test solution.primal_status == SolutionStatus(2)
         sol = [-6.2, -4, 0, -2, -5, 0]
         @test issetequal(solution.x, sol)
+        @test solution.objective_value == -60.2
 
         @test typeof(solution.algorithm_used) == typeof(DifferenceConstraints())
 
@@ -949,7 +960,7 @@ using LinearAlgebra
         algoModel5 = AlgoModel(model5)
 
         @test SolverPeeker.optimize!(algoModel5, DifferenceConstraints()) == true
-        @test algoModel5.status == TerminationStatus(4)
+        @test algoModel5.status == TerminationStatus(6)
 
         solution = algoModel5.solution
         @test solution.primal_status == SolutionStatus(2)
@@ -980,7 +991,7 @@ using LinearAlgebra
         algoModel4 = AlgoModel(model4)
 
         @test SolverPeeker.optimize!(algoModel4, DifferenceConstraints()) == true
-        @test algoModel4.status == TerminationStatus(4)
+        @test algoModel4.status == TerminationStatus(6)
 
         solution = algoModel4.solution
         @test solution.primal_status == SolutionStatus(2)
@@ -1008,7 +1019,7 @@ using LinearAlgebra
         algoModel5 = AlgoModel(model5)
 
         @test SolverPeeker.optimize!(algoModel5, DifferenceConstraints()) == true
-        @test algoModel5.status == TerminationStatus(4)
+        @test algoModel5.status == TerminationStatus(6)
 
         solution = algoModel5.solution
         @test solution.primal_status == SolutionStatus(2)
@@ -1036,7 +1047,7 @@ using LinearAlgebra
         algoModel5 = AlgoModel(model5)
 
         @test SolverPeeker.optimize!(algoModel5, DifferenceConstraints()) == true
-        @test algoModel5.status == TerminationStatus(4)
+        @test algoModel5.status == TerminationStatus(6)
 
         solution = algoModel5.solution
         @test solution.primal_status == SolutionStatus(2)
@@ -1065,7 +1076,7 @@ using LinearAlgebra
         algoModel5 = AlgoModel(model5)
 
         @test SolverPeeker.optimize!(algoModel5, DifferenceConstraints()) == true
-        @test algoModel5.status == TerminationStatus(3)
+        @test algoModel5.status == TerminationStatus(7)
         @test typeof(algoModel5.solution.algorithm_used) == typeof(DifferenceConstraints())
 
         
@@ -1090,7 +1101,7 @@ using LinearAlgebra
         algoModel5 = AlgoModel(model5)
 
         @test SolverPeeker.optimize!(algoModel5, DifferenceConstraints()) == true
-        @test algoModel5.status == TerminationStatus(3)
+        @test algoModel5.status == TerminationStatus(7)
         @test typeof(algoModel5.solution.algorithm_used) == typeof(DifferenceConstraints())
 
         # But ok when it adds to an integer number
@@ -1113,7 +1124,7 @@ using LinearAlgebra
         algoModel5 = AlgoModel(model5)
 
         @test SolverPeeker.optimize!(algoModel5, DifferenceConstraints()) == true
-        @test algoModel5.status == TerminationStatus(4)
+        @test algoModel5.status == TerminationStatus(6)
 
         solution = algoModel5.solution
         @test solution.primal_status == SolutionStatus(2)
@@ -1142,7 +1153,7 @@ using LinearAlgebra
         algoModel5 = AlgoModel(model5)
 
         @test SolverPeeker.optimize!(algoModel5, DifferenceConstraints()) == true
-        @test algoModel5.status == TerminationStatus(3)
+        @test algoModel5.status == TerminationStatus(7)
         @test typeof(algoModel5.solution.algorithm_used) == typeof(DifferenceConstraints())
 
         
@@ -1166,7 +1177,7 @@ using LinearAlgebra
         algoModel5 = AlgoModel(model5)
 
         @test SolverPeeker.optimize!(algoModel5, DifferenceConstraints()) == true
-        @test algoModel5.status == TerminationStatus(4)
+        @test algoModel5.status == TerminationStatus(6)
 
         solution = algoModel5.solution
         @test solution.primal_status == SolutionStatus(2)
@@ -1187,7 +1198,7 @@ using LinearAlgebra
         algoModel6 = AlgoModel(model6)
 
         @test SolverPeeker.optimize!(algoModel6, DifferenceConstraints()) == true
-        @test algoModel6.status == TerminationStatus(3)
+        @test algoModel6.status == TerminationStatus(7)
         @test typeof(algoModel6.solution.algorithm_used) == typeof(DifferenceConstraints())
 
 
@@ -1202,7 +1213,7 @@ using LinearAlgebra
         algoModel6 = AlgoModel(model6)
 
         @test SolverPeeker.optimize!(algoModel6, DifferenceConstraints()) == true
-        @test algoModel6.status == TerminationStatus(4)
+        @test algoModel6.status == TerminationStatus(6)
 
         solution = algoModel6.solution
         @test solution.primal_status == SolutionStatus(2)
@@ -1223,7 +1234,7 @@ using LinearAlgebra
         algoModel6 = AlgoModel(model6)
 
         @test SolverPeeker.optimize!(algoModel6, DifferenceConstraints()) == true
-        @test algoModel6.status == TerminationStatus(3)
+        @test algoModel6.status == TerminationStatus(7)
         @test typeof(algoModel6.solution.algorithm_used) == typeof(DifferenceConstraints())
 
         # Remove integer, and see that it works
@@ -1237,7 +1248,7 @@ using LinearAlgebra
         algoModel6 = AlgoModel(model6)
 
         @test SolverPeeker.optimize!(algoModel6, DifferenceConstraints()) == true
-        @test algoModel6.status == TerminationStatus(4)
+        @test algoModel6.status == TerminationStatus(6)
 
         solution = algoModel6.solution
         @test solution.primal_status == SolutionStatus(2)

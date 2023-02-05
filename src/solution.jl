@@ -1,19 +1,19 @@
 export Solution
-export set_solution!
+export set_sln_status!
 
 mutable struct Solution
     #var_count::Union{Int64, Nothing}
     #con_count::Union{Int64, Nothing}
 
-    primal_status::SolutionStatus
+    @atomic primal_status::SolutionStatus
     #dual_status::SolutionStatus
 
-    x::Union{Vector{Float64}, Nothing}
+    @atomic x::Union{Vector{Float64}, Nothing}
     #Ax::Union{Vector{Float64}, Nothing}
 
-    objective_value::Union{Float64, Nothing}
+    @atomic objective_value::Union{Float64, Nothing}
 
-    algorithm_used::Union{Algorithm, Nothing}
+    @atomic algorithm_used::Union{Algorithm, Nothing}
 
 end
 
@@ -39,11 +39,25 @@ Solution() = Solution(
     )
 
 
-    function set_solution!(solution, primal_status, x, objective_value, algorithm_used)
-        solution.primal_status = primal_status
-        solution.x = x
-        if !isnothing(objective_value) 
-            solution.objective_value = objective_value
-        end
-        solution.algorithm_used = algorithm_used
+function set_solution!(model, primal_status, x, objective_value, algorithm_used)
+    # Return if already set by another thread!
+    if model.solution.primal_status != Sln_Unknown
+        return
     end
+    @atomic model.solution.primal_status = primal_status
+    @atomic model.solution.x = x
+    if !isnothing(objective_value) 
+        @atomic model.solution.objective_value = objective_value
+    end
+    @atomic model.solution.objective_value = objective_value
+    @atomic model.solution.algorithm_used = algorithm_used
+end
+
+# TODO, test this. Update also if better solution?
+function set_sln_status!(model, primal_status)
+    # Return if already set by another thread.
+    if (model.solution.primal_status != Sln_Unknown)
+        return
+    end
+    @atomic model.solution.primal_status = primal_status
+end
