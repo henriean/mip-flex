@@ -6,8 +6,8 @@ export recognize, optimize!
 
 
 # TODO: Throw exceptions
-# TODO: Alter add_algorithm to set_algorithm
-# TODO: Make function get(algoModel, TerminationStatus())
+# TODO: Alter add_algorithm name to set_algorithm for consistency
+# TODO: Make function get-ers?
 # Could re-make model in case it is updated, every time optimize is called?
 function optimize!(algo_model::AlgoModel)
 
@@ -88,47 +88,6 @@ function optimize!(algo_model::AlgoModel)
     end
 
 end
-
-
-# TODO: Make a method for setting no solution if LP not consistent!!!
-
-
-
-
-#_____________________
-# Remove following?
-
-#function recognize(model::JuMP.Model, ::Type{T}) where T<: MOI.AbstractOptimizer
-#    return true
-#end
-
-#function optimize!(model::JuMP.Model, solver_constructor::Type{T}; add_bridges::Bool = true) where T <: MOI.AbstractOptimizer
-#    JuMP.set_optimizer(model, solver_constructor; add_bridges = add_bridges)
-#    optimize!(model)
-#end
-
-
-# TODO: Fix?
-#function optimize!(model::JuMP.Model, vector::AbstractVector; add_bridges::Bool = true)
-#    for element in vector
-#        optimize!(model, element, add_bridges = add_bridges)
-#    end
-#end
-
-# Assumes rep not set, but algorithms are set
-#function optimize!(model::JuMP.Model, algo_model::AlgoModel; kwargs...)
-#    if !are_algorithms_set(algo_model)
-#        # Set status or something
-#        algo_model.status = Trm_NotCalled
-#        algo_model.solution.primal_status = Sln_Unknown
-#        print("\n No algorithms are specified for this model.\n")
-#        return
-#    end
-
-#    set_rep!(algo_model, model)
-
-#    optimize!(algo_model)
-#end
 
 
 

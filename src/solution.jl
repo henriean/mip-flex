@@ -2,8 +2,6 @@ export Solution
 export set_sln_status!
 
 mutable struct Solution
-    #var_count::Union{Int64, Nothing}
-    #con_count::Union{Int64, Nothing}
 
     @atomic primal_status::SolutionStatus
     #dual_status::SolutionStatus
@@ -17,16 +15,6 @@ mutable struct Solution
 
 end
 
-
-#Solution(var_count, con_count) = Solution(
-#        var_count, con_count,
-#        Sln_Unknown,
-#        #Sln_Unknown,
-#        nothing,
-#        #nothing,
-#        nothing,
-#        nothing
-#    )
 
 Solution() = Solution(
         #nothing, nothing,

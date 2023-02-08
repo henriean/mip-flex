@@ -140,9 +140,6 @@ function optimize!(model::AlgoModel, difference_constraint::DifferenceConstraint
             value = common[1]
 
             if split
-                # Sort var_to_name on keys
-                #sorted_var_to_name = sort(collect(rep.var_to_name), by=x->x[1])
-
                 # Order the variables, and split into A and B, and move.
                 #var_sol_pair = collect(zip(collect(keys(sorted_var_to_name)), dists))
                 var_sol_pair = collect(zip([i for i in 1:rep.var_count], dists))
@@ -262,9 +259,6 @@ function optimize!(model::AlgoModel, difference_constraint::DifferenceConstraint
                 end
             end
         end
-
-        
-        # TODO: Be sure not only one solution
         set_trm_status!(model, Trm_Feasibility)
         set_solution!(model, 
                     Sln_FeasiblePoint, 
@@ -277,7 +271,6 @@ function optimize!(model::AlgoModel, difference_constraint::DifferenceConstraint
     catch error
         if isa(error, Graphs.NegativeCycleError)
             # Update no feasible solution
-            # TODO: Not sure if dual infeasible or not. Check results?
             set_trm_status!(model, Trm_Infeasibility)
             set_solution!(model, 
                     Sln_Infeasible, 

@@ -5,8 +5,7 @@ export AlgoModel
 export update!, add_algorithms!, add_algorithm!, set_rep!, set_optimizer, set_trm_status!
 export is_model_set, is_rep_set, are_algorithms_set, got_answer, solver_name
 
-# TODO: Get-methods and set-methods
-# TODO: Parallelism flag?
+
 mutable struct AlgoModel
 
     @atomic status::TerminationStatus  
@@ -37,7 +36,7 @@ AlgoModel(jump_model, algorithm) = AlgoModel(Trm_NotCalled, jump_model, LPRep(ju
 AlgoModel(jump_model, algorithms::Vector) = AlgoModel(Trm_NotCalled, jump_model, LPRep(jump_model), algorithms, Solution())
 
 
-# TODO: Test
+
 function update!(algo_model)
     algo_model.rep = LPRep(jump_model)
 end
@@ -54,8 +53,6 @@ end
 add_algorithm!(algo_model, algorithm::Algorithm) = add_algorithms!(algo_model, [algorithm])
 
 
-# TODO: Remove algorithm!
-# Prioritetsfelt!
 
 
 function set_rep!(algo_model, jump_model)

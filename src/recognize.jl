@@ -11,8 +11,6 @@ Functions for recognizing properties of the a LPModel
 
 export recognize
 
-#function recognize(::SparseMatrixCSC{Float64, Int64}, ::Array{Float64,1}, ::AbstractRecognizeAttribute) <: Bool end
-
 # TODO. If x1 - x2 <= 0
 # And x2 - x1 <= 0,
 # Then set x1 == x2.
@@ -75,32 +73,3 @@ function recognize(model, ::DifferenceConstraints)
         return (false, nothing, nothing)
     end
 end
-
-#function recognize(lpmodel, ::AllIntegerVariables)
-#    integers = get_integer_variables(lpmodel)
-#    # Filter out the NaNs:
-#    num_imntegers = length(filter(integers->!isnan(integers),integers))
-#    return num_imntegers == lpmodel.num_variables_created
-#end
-
-#function recognize(b, ::AllIntegerConstraintBounds)
-#    # If after truncation the element is equal to itself, it is an integer:
-#    for element in b
-#        if !(trunc(Int, element) == element)
-#            return false
-#        end
-#    end
-#    return true
-#end
-
-
-
-
-#function recognize(lpmodel::LPModel, ::ConstantObjective)
-#    c = get_objective_vector(lpmodel)
-#    return (c == zeros(size(c)[1]))
-#end
-
-
-
-

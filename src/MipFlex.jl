@@ -29,7 +29,6 @@ include("solution.jl")
 include("algoModel.jl")
 include("interface.jl")
 include("bellman-ford-adjusted.jl")
-include("attributes.jl")
 include("recognize.jl")
 include("optimize.jl")
 
