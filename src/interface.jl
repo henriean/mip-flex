@@ -6,6 +6,9 @@ export recognize, optimize!
 
 
 # TODO: Throw exceptions
+# TODO: Alter add_algorithm to set_algorithm
+# TODO: Make function get(algoModel, TerminationStatus())
+# Could re-make model in case it is updated, every time optimize is called?
 function optimize!(algo_model::AlgoModel)
 
     # Check if model is set
@@ -21,12 +24,8 @@ function optimize!(algo_model::AlgoModel)
 
     # If problem already is inconsistent, we know it's infeasible already
     if !algo_model.rep.is_consistent
-        algo_model.status = Trm_PrimalInfeasible
-        set_solution!(algo_model.solution, 
-                Sln_Infeasible, 
-                nothing, 
-                nothing, 
-                nothing)
+        set_trm_status!(algo_model, Trm_Infeasibility)
+        set_sln_status!(algo_model, Sln_Infeasible)
         return
     end
 
@@ -35,12 +34,8 @@ function optimize!(algo_model::AlgoModel)
         try
             optimize!(algo_model.jump_model)
             # Set TerminationStatus, and solution
-            algo_model.status = Trm_SolverUsed
-            set_solution!(algo_model.solution, 
-                Sln_SolverUsed, 
-                nothing, 
-                nothing, 
-                nothing)
+            set_trm_status!(algo_model, Trm_SolverUsed)
+            set_sln_status!(algo_model, Sln_SolverUsed)
             return
         catch e
             # exception that neither algorithms or optimizer set
@@ -63,18 +58,33 @@ function optimize!(algo_model::AlgoModel)
         try
             optimize!(algo_model.jump_model)
             # Set TerminationStatus, and solution
-            algo_model.status = Trm_SolverUsed
-            set_solution!(algo_model.solution, 
-                Sln_SolverUsed, 
-                nothing, 
-                nothing, 
-                nothing)
+            set_trm_status!(algo_model, Trm_SolverUsed)
+            set_sln_status!(algo_model, Sln_SolverUsed)
+            return
         catch e
             # set unknown
             return
         end
+
+    # More than one thread:
     else
-        # TODO: Parallelism
+        Threads.@threads for algorithm in algo_model.algorithms
+            if optimize!(algo_model, algorithm) == true
+                return
+            end
+        end
+
+        Threads.@spawn (try
+            optimize!(algo_model.jump_model)
+            # Set TerminationStatus, and solution
+            set_trm_status!(algo_model, Trm_SolverUsed)
+            set_sln_status!(algo_model, Sln_SolverUsed)
+            return
+        catch e
+            # set unknown
+            return
+        end)
+
     end
 
 end

@@ -1,17 +1,17 @@
 push!(LOAD_PATH,"../src/")
-using SolverPeeker
+using MipFlex
 using Documenter
 
-DocMeta.setdocmeta!(SolverPeeker, :DocTestSetup, :(using SolverPeeker); recursive=true)
+DocMeta.setdocmeta!(MipFlex, :DocTestSetup, :(using MipFlex); recursive=true)
 
 makedocs(;
-    modules=[SolverPeeker],
+    modules=[MipFlex],
     authors="Henriette Andersen <henriean@stud.ntnu.no> and contributors",
-    repo="https://github.com/henriean/SolverPeeker.jl/blob/{commit}{path}#{line}",
-    sitename="SolverPeeker.jl",
+    repo="https://github.com/henriean/MipFlex.jl/blob/{commit}{path}#{line}",
+    sitename="MipFlex.jl",
     format=Documenter.HTML(;
         prettyurls=get(ENV, "CI", "false") == "true",
-        canonical="https://henriean.github.io/SolverPeeker.jl",
+        canonical="https://henriean.github.io/MipFlex.jl",
         assets=String[],
     ),
     pages=[
@@ -20,5 +20,5 @@ makedocs(;
 )
 
 deploydocs(;
-    repo="github.com/henriean/SolverPeeker.jl",
+    repo="github.com/henriean/MipFlex.jl",
 )

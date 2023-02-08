@@ -1,5 +1,5 @@
 """
-    SolverPeeker
+    MipFlex
 
 Wrapper for JuMP models, looking for patterns in order to find alternative solutions procedures for linear programs.
 
@@ -10,7 +10,7 @@ Wrapper for JuMP models, looking for patterns in order to find alternative solut
 # TODO: An example with sending in heuristic or flag?
 # TODO: Time limit?
 
-module SolverPeeker
+module MipFlex
 
 using JuMP
 using MathOptInterface

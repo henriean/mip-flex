@@ -12,6 +12,8 @@ Termination status
     Trm_PrimalInfeasible,
     Trm_DualInfeasible,
     Trm_PrimalDualInfeasible,
+    Trm_Feasibility,
+    Trm_Infeasibility,
     # Limits
     Trm_IterationLimit,
     Trm_TimeLimit,

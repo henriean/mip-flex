@@ -23,8 +23,7 @@ function recognize(model, ::DifferenceConstraints)
     # NB: Works on transpose of A
     lp = model.rep
     At = lp.At 
-    nzval = At.nzval
-    colptr = At.colptr
+    all_values = nonzeros(At)
     b = lp.b
 
     # Constraints being difference constraints:
@@ -41,7 +40,7 @@ function recognize(model, ::DifferenceConstraints)
 
     # Go through each row
     for j in 1:lp.con_count
-        values = nzval[colptr[j]:colptr[j+1]-1]
+        values = all_values[collect(nzrange(At, j))]
 
         # If more than two non-zero variables, it's not difference constraints,
         # Less than 2 does not appear since it's filtered to single variable vectors at construction of LPRep.
