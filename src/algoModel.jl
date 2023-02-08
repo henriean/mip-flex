@@ -1,39 +1,45 @@
 
+import JuMP.solver_name, JuMP.set_optimizer
 
 export AlgoModel
-export add_algorithms!, add_algorithm!, set_rep!
-export is_rep_set, are_algorithms_set, got_answer
+export update!, add_algorithms!, add_algorithm!, set_rep!, set_optimizer, set_trm_status!
+export is_model_set, is_rep_set, are_algorithms_set, got_answer, solver_name
 
-# TODO: Get-methods and set-methods
-# TODO: Hold JumpModel? (to optimize it. possibility to get new model if a flag for updating?)
-# TODO: Parallelism flag?
+
 mutable struct AlgoModel
 
-    status::TerminationStatus  
+    @atomic status::TerminationStatus  
+
+    jump_model::Union{JuMP.Model, Nothing}
 
     rep::Union{LPRep, Nothing}
 
     algorithms::Union{Vector{Algorithm}, Nothing}
 
-    solution::Solution
+    @atomic solution::Solution
 
     # Possibly add a struct of parameters if needed later.
 
 end
 
 # Constructors
-AlgoModel(jump_model)  = AlgoModel(Trm_NotCalled, LPRep(jump_model), nothing, Solution())
+AlgoModel() = AlgoModel(Trm_NotCalled, nothing, nothing, nothing, Solution()) # TODO: Test
 
-AlgoModel(algorithm::Algorithm) = AlgoModel(Trm_NotCalled, nothing, [algorithm], Solution())
+AlgoModel(jump_model) = AlgoModel(Trm_NotCalled, jump_model, LPRep(jump_model), nothing, Solution())
 
-AlgoModel(algorithms::Vector) = AlgoModel(Trm_NotCalled, nothing, algorithms, Solution())
+AlgoModel(algorithm::Algorithm) = AlgoModel(Trm_NotCalled, nothing, nothing, [algorithm], Solution())
 
-AlgoModel(jump_model, algorithm) = AlgoModel(Trm_NotCalled, LPRep(jump_model), [algorithm], Solution())
+AlgoModel(algorithms::Vector) = AlgoModel(Trm_NotCalled, nothing, nothing, algorithms, Solution())
 
-AlgoModel(jump_model, algorithms::Vector) = AlgoModel(Trm_NotCalled, LPRep(jump_model), algorithms, Solution())
+AlgoModel(jump_model, algorithm) = AlgoModel(Trm_NotCalled, jump_model, LPRep(jump_model), [algorithm], Solution())
+
+AlgoModel(jump_model, algorithms::Vector) = AlgoModel(Trm_NotCalled, jump_model, LPRep(jump_model), algorithms, Solution())
 
 
-# TDOD: Use set-methods
+
+function update!(algo_model)
+    algo_model.rep = LPRep(jump_model)
+end
 
 # Requires model to have an algorithms field.
 function add_algorithms!(algo_model, algorithms::Vector)
@@ -47,17 +53,47 @@ end
 add_algorithm!(algo_model, algorithm::Algorithm) = add_algorithms!(algo_model, [algorithm])
 
 
+
+
 function set_rep!(algo_model, jump_model)
+    algo_model.jump_model = jump_model
     algo_model.rep = LPRep(jump_model)
 end
 
 
-# TODO: Set JuMP-model
+function set_optimizer(algo_model::AlgoModel, optimizer)
+    if is_model_set(algo_model)
+        set_optimizer(algo_model.jump_model, optimizer)
+        return true
+    else
+        return false
+    end
+end
 
-#TODO getters?, Optimize(under ), print solution
 
-# Checks for set fields:
-# Maybe not needed
+ok_statuses = [Trm_Optimal, Trm_PrimalInfeasible, Trm_DualInfeasible, Trm_PrimalDualInfeasible, Trm_SolverUsed]
+function set_trm_status!(algo_model, status::TerminationStatus)
+    # Return if already set by another thread!
+    if in(algo_model.status, ok_statuses)
+        return
+    end
+    @atomic algo_model.status = status
+end
+
+
+function solver_name(algo_model::AlgoModel)
+    solver_name(algo_model.jump_model)
+end
+
+
+
+function is_model_set(algo_model)
+    if !isnothing(algo_model.jump_model)
+        return true
+    end
+    return false
+end
+
 
 function is_rep_set(algo_model)
     if !isnothing(algo_model.rep)
@@ -79,8 +115,5 @@ function got_answer(algo_model)
     end
     return false
 end
-
-
-
 
 

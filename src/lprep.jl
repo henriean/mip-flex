@@ -26,7 +26,7 @@ MOI.Utilities.@model(
 Core.@doc """
     LPModel
 
-A special JuMP ModelLike type defined for use in ['SolverPeeker'](@ref).
+A special JuMP ModelLike type defined for use in ['MipFlex'](@ref).
 
 This type only supports ['MathOptInterface.LessThan'](@ref) typed scalar sets, and only
 ['MathOptInterface.ScalarAffineFunction'](@ref) typed scalar functions, meaning that any
@@ -37,7 +37,7 @@ Single variable constraints cannot be controlled by this, and can be
 ['MathOptInterface.LessThan'](@ref), ['MathOptInterface.Interval'](@ref),
 ['MathOptInterface.Integer'](@ref), ['MathOptInterface.ZeroOne'](@ref), 
 ['MathOptInterface.Semicontionous'](@ref) or ['MathOptInterface.Semiinteger'](@ref).
-""" SolverPeeker.LPModel
+""" MipFlex.LPModel
 
 """
     MOI.supports_constraint(BT::LPModel{T}, <keyword arguments>)
@@ -81,13 +81,6 @@ function get_lpmodel(model::MOI.ModelLike, T::Type = Float64)
     # Do the actual bridging into lpmodel:
     MOI.copy_to(bridging_model, model)
 
-    # Check for supported constraints
-    for (F,S) in MOI.get(lpmodel, MOI.ListOfConstraintTypesPresent())
-        if !MOI.supports_constraint(lpmodel, F, S)
-            throw(MOI.UnsupportedConstraint{F,S}())
-        end
-    end
-
     return lpmodel
 end
 
@@ -104,72 +97,61 @@ get_lpmodel(model::JuMP.Model) = get_lpmodel(backend(model))
 #LPRep will be a struct holding desired fields.
 
 
-
-# Here 1 is set whenever the index variable is defined to be zero_one.
-#function get_zero_one_variables(lpmodel)
-#    cis_z = MOI.get(lpmodel, MOI.ListOfConstraintIndices{MathOptInterface.SingleVariable,MathOptInterface.ZeroOne}())
-
-#    zero_one = fill(NaN, lpmodel.num_variables_created)
-
-#    for index in cis_z
-#       zero_one[MOI.get(lpmodel, MOI.ConstraintFunction(), index).variable.value] = 1
-#    end
-#    return zero_one
-#end
-
-
-
-
-
-#cis_g = MOI.get(lpmodel, MOI.ListOfConstraintIndices{MathOptInterface.SingleVariable,MathOptInterface.GreaterThan{Float64}}())
-
-
-# TODO: Insert list zero-one variables.
 struct LPRep
 
     # If, on creation, an inconsistency is revealed,
     # set this flag to false, and stop creating the representation
     is_consistent::Bool
 
-    var_count::Int64  # Number of variables
-    con_count::Int64  # Number of constraints
+    var_count::Union{Int64, Nothing} # Number of variables
+    con_count::Union{Int64, Nothing}  # Number of constraints
 
     #Optimisation sense and vector c representing the objective function.
-    sense::MOI.OptimizationSense
-    c::Vector{Float64}
-    obj_constant::Float64
+    sense::Union{MOI.OptimizationSense, Nothing}
+    c::Union{Vector{Float64}, Nothing}
+    obj_constant::Union{Float64, Nothing}
 
     # Matrix A and vector b representing the linear system of LessThan inequalities,
     # while At is the transposed version of A.
-    A::SparseMatrixCSC{Float64, Int64}
-    b::Vector{Float64}
-    At::SparseMatrixCSC{Float64, Int64}
+    A::Union{SparseMatrixCSC{Float64, Int64}, Nothing}
+    b::Union{Vector{Float64}, Nothing}
+    At::Union{SparseMatrixCSC{Float64, Int64}, Nothing}
 
     # greater than variables
-    greater_than::Dict{Int64, Float64}
+    greater_than::Union{Dict{Int64, Float64}, Nothing}
 
     # less than variables
-    less_than::Dict{Int64, Float64}
+    less_than::Union{Dict{Int64, Float64}, Nothing}
 
     # integer variables
-    integer::Dict{Int64, Bool}
+    integer::Union{Dict{Int64, Bool}, Nothing}
 
     # dict of original equality variables
-    equal_to::Dict{Int64, Float64}
-
-    # zero-one variables
-    #zero_one::Array{T,1}
+    equal_to::Union{Dict{Int64, Float64}, Nothing}
 
     # Mapping between original variable names and column in matrix.
-    var_to_name::Dict{Int64, String}
+    var_to_name::Union{Dict{Int64, String}, Nothing}
 
 end
 
 
+LPRep() = LPRep(
+            false,
+            nothing,
+            nothing,
+            nothing,
+            nothing,
+            nothing,
+            nothing,
+            nothing,
+            nothing,
+            nothing,
+            nothing,
+            nothing,
+            nothing,
+            nothing)
 
 
-# Right now does not support equal to - constraints for variables.
-# Throws error if '='.
 
 function LPRep(lpmodel::LPModel)
 
@@ -185,6 +167,7 @@ function LPRep(lpmodel::LPModel)
 
     # Constraint indices from regular constraints (only affine in less than allowed.)
     cis = MOI.get(lpmodel, MOI.ListOfConstraintIndices{MOI.ScalarAffineFunction{Float64}, MOI.LessThan{Float64}}())
+
     # Initial constraints number.
     con_number = length(cis)
 
@@ -230,13 +213,10 @@ function LPRep(lpmodel::LPModel)
             end
 
         elseif length(terms) == 0
-            # TODO: Check that the following is true.
             # Variable is set to zero, and if constant is less than zero, it's inconsistent
             # If it's greater than zero, then it's redundant
             if constant < 0
-                is_consistent = false
-                # Stop building? Proof?
-                # It will be that constraint nr i states 0 < negative_constant
+                return LPRep()
             end
 
         else
@@ -255,11 +235,21 @@ function LPRep(lpmodel::LPModel)
     b = b[1:con_count]  # May be initialized too big
 
     # Make sparse matrices
+    # If f.ex. last variable was in no constraints, the matrix may be to small,
+    # so add appropriate entries:
+    l = isempty(C) ? 0 : maximum(C)
+    if l!=var_count
+        diff = var_count-l
+        for i in (l+1):(l+diff)
+            append!(R, 1)
+            append!(C, i)
+            append!(V, 0)
+        end
+    end
+
+    # Construct matrices
     A = sparse(R,C,V)
     At = sparse(C,R,V)
-    # Drop zeros if any are registered
-    dropzeros!(A)
-    dropzeros!(At)
 
     # Get integer variables
     cis_i = MOI.get(lpmodel, MOI.ListOfConstraintIndices{MOI.VariableIndex, MathOptInterface.Integer}())
@@ -292,17 +282,25 @@ function LPRep(lpmodel::LPModel)
         update_dict!(greater_than, index, constant, false)
     end
 
+
+    # Remove MathOptInterface type in var_to_name dict
+    var_to_name = Dict()
+    for (key, entry) in lpmodel.var_to_name
+        var_to_name[key.value] = entry
+    end
+
     # Check for infeasibility in greater than, less than, and equal to dictionaries.
-    # If already false dont bother checking
-    is_consistent = is_consistent ? consistency_check!(less_than, greater_than, integer, equal_to) : is_consistent
+    if !consistency_check!(keys(var_to_name), less_than, greater_than, integer, equal_to)
+        return LPRep()
+    end
 
     # At this point, if some variables need to be equal others,
     # if the model is still consistent, substitute them in.
-    if (is_consistent && !isempty(equal_to))
+    if !isempty(equal_to)
         # If A is empty, nothing to do
-        if !isempty(A)
+        if !iszero(A)
             A, At, b = substitute_equal_to(A, b, equal_to)
-            # Check new consistency + remove unneeded constraints.
+            # Check new consistency + log unneeded constraints.
             remove_dict = Dict()
             is_consistent, A, At, b =  matrix_check(A, At, b, less_than, greater_than, integer, equal_to, remove_dict)
 
@@ -315,22 +313,28 @@ function LPRep(lpmodel::LPModel)
         end
     end
 
+    # If not consistent, return
+    if !is_consistent
+        return LPRep()
+    end
+
     # Get objective function
-    objective = fill(0, var_count)
+    objective = zeros(var_count)
     o = MOI.get(lpmodel, MOI.ObjectiveFunction{MathOptInterface.ScalarAffineFunction{Float64}}())
     for term in o.terms
         objective[term.variable.value] = term.coefficient
     end
     obj_constant = o.constant
 
-    # Remove MathOptInterface type in dict
-    var_to_name = Dict()
-    for (key, entry) in lpmodel.var_to_name
-        var_to_name[key.value] = entry
-    end
+
+    # Drop zeros if any are registered
+    dropzeros!(A)
+    dropzeros!(At)
 
 
-    return LPRep(is_consistent,
+
+    return LPRep(
+        is_consistent,
         var_count,
         con_count,
         MOI.get(lpmodel, MOI.ObjectiveSense()), 
@@ -351,14 +355,10 @@ LPRep(model::JuMP.Model) = LPRep(get_lpmodel(model))
 
 
 
-
-
-
-
 # Updates dictionary of bounds only if new bound is stricter.
 function update_dict!(dict, index, constant, less_than=true)
     if less_than
-        if (!haskey(dict, index) || dict[index] > constant)
+        if (!haskey(dict, index) || constant < dict[index])
             dict[index] = constant
         end
     else
@@ -371,65 +371,79 @@ end
 
 
 # Checks for inconsistencies in the different constraints on single variables
-function consistency_check!(less_than, greater_than, integer, equal_to)
-    this_check = true
+function consistency_check!(indices, less_than, greater_than, integer, equal_to)
+    
+    for i in intersect(indices, keys(less_than), keys(greater_than))
 
-    for i in intersect(keys(less_than), keys(greater_than))
-        if less_than[i] < greater_than[i]
-            # Infeasibe, empty set of legal values
-            this_check = false
-
-        elseif haskey(integer, i) && (less_than[i] - greater_than[i] < 1) && (less_than[i] != greater_than[i])
-            # Infeasible, no legal integer values
-            this_check = false
-
-        elseif greater_than[i] == less_than[i]
+        # NB! Use approx as floating point prescisio can ruin the test.
+        # Somehow should report the possible inprecision.
+        if greater_than[i] ≈ less_than[i]
             if haskey(equal_to, i) && equal_to[i] != less_than[i]
                 # Cannot be equal to two different values.
-                this_check = false
+                return false
+                # Cannot be equal to a non-integer
+                return false
             end
             # Update equal_to and remove entries from the other dictionaries
             equal_to[i] = less_than[i]
             delete!(greater_than, i)
             delete!(less_than, i)
+
+        elseif less_than[i] < greater_than[i]
+            return false
+
+        else # greater_than[i] < less_than[i]
+            if haskey(integer, i) 
+                if  !isinteger(less_than[i]) && !isinteger(greater_than[i]) && (floor(less_than[i]) == floor(greater_than[i]))
+                    # No integer value in the interval
+                    return false
+                end
+            end
         end
+
     end
 
-    for i in intersect(keys(equal_to), keys(less_than))
+    for i in intersect(indices, keys(equal_to), keys(less_than))
         if less_than[i] < equal_to[i]
             # Impossible to be equal to the value
-            this_check = false
+            return false
         end
         # Remove less_than, as equal_to is stricter
         delete!(less_than, i)
     end
 
 
-    for i in intersect(keys(equal_to), keys(greater_than))
-        if greater_than[i] > equal_to[i]
+    for i in intersect(indices, keys(equal_to), keys(greater_than))
+        if equal_to[i] < greater_than[i]
             # Impossible to be equal to the value
-            this_check = false
+            return false
         end
         # Remove greater_than, as equal_to is stricter
         delete!(greater_than, i)
     end
 
-    return this_check
+    return true
 end
 
 
-function matrix_check(A, At, b, less_than, greater_than, integer, equal_to, remove_dict)
 
-    this_check = true
+function matrix_check(A, At, b, less_than, greater_than, integer, equal_to, remove_dict)
+    # At info:
+    _, n = size(At)
+    all_values = nonzeros(At)
+    all_rows = rowvals(At)
+
+    # Changed indices
+    changed = []
 
     # Go through columns in At
-    for c in 1:size(At)[2]
+    for c in 1:n
         # If already went through on another loop, skip
         if (haskey(remove_dict, c))
             continue
         end
         # Nonzero values of column c of At:
-        values = At.nzval[At.colptr[c]:At.colptr[c+1]-1]
+        values = all_values[collect(nzrange(At, c))]
         nonzeros = findall(x -> x!=0, values)
 
         # First, if row in A with only zeros, check if consistent,
@@ -439,23 +453,25 @@ function matrix_check(A, At, b, less_than, greater_than, integer, equal_to, remo
             remove_dict[c] = true
 
             if !(0 <= b[c])
-                this_check = false
+                return false
             end
         
         # Then, if a row has only one entry, move to less than, and check for consistency
-        elseif length(nonzeros) == 1
+        elseif (length(nonzeros) == 1)
 
             # Remove this column / row in A 
             remove_dict[c] = true
-
-            variable_index = At.rowval[At.colptr[c]-1 + nonzeros[1]]
+            
+            variable_index = all_rows[collect(nzrange(At, c))][nonzeros[1]]
             value = values[nonzeros[1]]
 
             # Update single variable lists 
             if (value > 0)
                 update_dict!(less_than, variable_index, (b[c]/value))
+                append!(changed, variable_index)
             elseif (value < 0)
                 update_dict!(greater_than, variable_index, ((-b[c])/(-value)), false)
+                append!(changed, variable_index)
             end
 
         end
@@ -463,25 +479,22 @@ function matrix_check(A, At, b, less_than, greater_than, integer, equal_to, remo
     end
 
     #Check consistency, and if new equal-to arrives, loop through
-    equality = copy(equal_to)
-    consistent =  consistency_check!(less_than, greater_than, integer, equal_to)
-
-    if !consistent
-        this_check = false
+    equality = deepcopy(equal_to)
+    if !consistency_check!(changed, less_than, greater_than, integer, equal_to)
+        return false, A, At, b
     end
 
     # If more variables are set as equal to a value, substitute those, and do another check
     new_equal = Dict(setdiff(equal_to, equality))
-    if !isempty(new_equal) && !isempty(A)
+    if !isempty(new_equal) && !iszero(A)
         A, At, b = substitute_equal_to(A, b, new_equal)
-        consistent, A, At, b = matrix_check(A, At, b, less_than, greater_than, integer, equal_to, remove_dict)
-        if !consistent
-            this_check = false
+        check, A, At, b = matrix_check(A, At, b, less_than, greater_than, integer, equal_to, remove_dict)
+        if check == false
+            return false, A, At, b
         end
-
     end
 
-    return this_check, A, At, b
+    return true, A, At, b
 end
 
 
@@ -489,22 +502,24 @@ end
 
 function substitute_equal_to(A, b, equal_to)
 
+    # Info on A:
+    all_values = nonzeros(A)
+    all_rows = rowvals(A)
+
     for c in keys(equal_to)
 
-        # Nonzero values of column c of A:
-        values = A.nzval[A.colptr[c]:A.colptr[c+1]-1]
-
         # subtract (equal_to[c] x column) from b
-        for i in eachindex(values)
-            row_index = A.rowval[A.colptr[c]-1 + i]
-            b[row_index] -= equal_to[c] * values[i]
+        for i in nzrange(A, c)
+            if all_values[i] != 0
+                row_index = all_rows[i]  # The constraint we are in
+                b[row_index] -= equal_to[c] * all_values[i]
+            end
         end
 
         # Set column c in A equal to zero
-        A.nzval[A.colptr[c]:A.colptr[c+1]-1] .= 0
-        dropzeros!(A)
-
+        all_values[collect(nzrange(A,c))] .= 0
     end
+    dropzeros!(A)
 
     # Create new At matrix which is transpose of A
     a = findnz(A)

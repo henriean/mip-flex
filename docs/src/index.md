@@ -1,12 +1,12 @@
 ```@meta
-CurrentModule = SolverPeeker
+CurrentModule = MipFlex
 ```
 
-# SolverPeeker
+# MipFlex
 
 ```@index
 ```
 
 ```@autodocs
-Modules = [SolverPeeker]
+Modules = [MipFlex]
 ```

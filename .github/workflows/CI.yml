@@ -55,9 +55,9 @@ jobs:
   #    - run: |
   #        julia --project=docs -e '
   #          using Documenter: DocMeta, doctest
-  #          using SolverPeeker
-  #          DocMeta.setdocmeta!(SolverPeeker, :DocTestSetup, :(using SolverPeeker); recursive=true)
-  #          doctest(SolverPeeker)'
+  #          using MipFlex
+  #          DocMeta.setdocmeta!(MipFlex, :DocTestSetup, :(using MipFlex); recursive=true)
+  #          doctest(MipFlex)'
   #    - run: julia --project=docs docs/make.jl
   #      env:
   #        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

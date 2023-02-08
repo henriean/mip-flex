@@ -9,12 +9,22 @@ export optimize!
 
 
 # Helper functions:
-# TODO: move to other file later
+function valid_single_variable_bounds(rep)
+    less = rep.less_than
+    greater = rep.greater_than
+
+    # If not empty, check if same element is everywhere in these dicts, and if not return
+    common = union(values(less), values(greater))
+    if !isempty(common) && length(union(values(less), values(greater))) != 1
+        return false
+    end
+    return true
+end
 
 
 
 # Assumes algoModel or similar fields
-function optimize!(model::AlgoModel, ::DifferenceConstraints)
+function optimize!(model::AlgoModel, difference_constraint::DifferenceConstraints)
     rep = model.rep
     less = rep.less_than
     greater = rep.greater_than
@@ -23,36 +33,41 @@ function optimize!(model::AlgoModel, ::DifferenceConstraints)
     # Look at what requirement the variables have.
     # At this point we do not support differenet SingleVariable bounds.
     # All should be less than, or greater than, the same constant (typically zero).
-    # TODO: Write in documentation.
 
     # If not empty, check if same elemnent is everywhere in these dicts, and if not return
     common = union(values(less), values(greater))
-    if !isempty(common) && length(union(values(less), values(greater))) != 1
-        model.status = Trm_Unknown
-        model.solution.primal_status = Sln_Unknown
+    if !isempty(common) && length(common) != 1
+        set_trm_status!(model, Trm_Unknown)
+        set_sln_status!(model, Sln_Unknown)
         return false
     end
+    
 
     # See if DifferenceConstraints are recognized, if not, return false
-    recognized, b = recognize(model, DifferenceConstraints())
+    recognized, b, constraint_numbers = recognize(model, difference_constraint)
 
     if !recognized
-        model.status = Trm_Unknown
-        model.solution.primal_status = Sln_Unknown
+        set_trm_status!(model, Trm_Unknown)
+        set_sln_status!(model, Sln_Unknown)
         return false
     end
-
-
 
     # Make the constraint graph
     At = rep.At
-    nzval = At.nzval
-    colptr = At.colptr
-    rowval = At.rowval
+    all_values = nonzeros(At)
+    all_rows = rowvals(At)
     variable_count = rep.var_count
     constraint_count = rep.con_count
 
-        
+    # Indicating whether only subproblem was difference constraints, or if the whole problem was
+    infeasible_test = false
+
+    # If not all constraints are difference constraints, flag it as infeasibility test.
+    number_of_edges = length(constraint_numbers)
+    if constraint_count != number_of_edges
+        infeasible_test = true
+    end
+
     # Directed graph with weights
     graph = SimpleWeightedDiGraph(variable_count)
 
@@ -60,9 +75,10 @@ function optimize!(model::AlgoModel, ::DifferenceConstraints)
     # Add edges and distances to the graph
     # Only the recent edge is stored, so use the strictest edge!
     # Go through each constraint
-    for k in 1:constraint_count
-        # Row k
-        values = nzval[colptr[k]:colptr[k+1]-1]
+    for k in constraint_numbers
+
+        values = all_values[collect(nzrange(At, k))]
+        rows = all_rows[collect(nzrange(At, k))]
 
         # The graph does not store zero edges, so
         # store them as a very small number.
@@ -74,9 +90,9 @@ function optimize!(model::AlgoModel, ::DifferenceConstraints)
         # since only b normalized.
 
         i = findall(x->x<=-1, values)[1]
-        i = rowval[colptr[k]-1 + i]
+        i = rows[i]
         j = findall(x->x>=1, values)[1]
-        j = rowval[colptr[k]-1 + j]
+        j = rows[j]
 
         # Add edge with weight to graph if it's stricter
         if Graphs.has_edge(graph, i, j)
@@ -114,7 +130,7 @@ function optimize!(model::AlgoModel, ::DifferenceConstraints)
         
     # Solve with adjusted Bellman-Ford
     try  
-        dists = bellman_ford_adjusted(graph, Graphs.LinAlg.adjacency_matrix(graph), keys(model.rep.integer))
+        dists = bellman_ford_adjusted(graph, Graphs.LinAlg.adjacency_matrix(graph), keys(model.rep.integer), difference_constraint.limit)
 
         # Adjust solution so that it fits with SingleVariable bounds
         if !isempty(common)
@@ -124,9 +140,6 @@ function optimize!(model::AlgoModel, ::DifferenceConstraints)
             value = common[1]
 
             if split
-                # Sort var_to_name on keys
-                #sorted_var_to_name = sort(collect(rep.var_to_name), by=x->x[1])
-
                 # Order the variables, and split into A and B, and move.
                 #var_sol_pair = collect(zip(collect(keys(sorted_var_to_name)), dists))
                 var_sol_pair = collect(zip([i for i in 1:rep.var_count], dists))
@@ -162,12 +175,12 @@ function optimize!(model::AlgoModel, ::DifferenceConstraints)
                     if (value - delta) < max_B
                         if !isempty(rep.integer)
                             # Infeasible
-                            model.status = Trm_PrimalInfeasible
-                            set_solution!(model.solution, 
+                            set_trm_status!(model, Trm_Infeasibility)
+                            set_solution!(model, 
                                     Sln_Infeasible, 
                                     nothing, 
                                     nothing, 
-                                    DifferenceConstraints())
+                                    difference_constraint)
                             return true
                         end
 
@@ -185,12 +198,12 @@ function optimize!(model::AlgoModel, ::DifferenceConstraints)
                     if (value + delta) > min_A
                         if !isempty(rep.integer)
                             # Infeasible
-                            model.status = Trm_PrimalInfeasible
-                            set_solution!(model.solution, 
+                            set_trm_status!(model, Trm_Infeasibility)
+                            set_solution!(model, 
                                     Sln_Infeasible, 
                                     nothing, 
                                     nothing, 
-                                    DifferenceConstraints())
+                                    difference_constraint)
                             return true
                         end
 
@@ -228,37 +241,53 @@ function optimize!(model::AlgoModel, ::DifferenceConstraints)
             dists[key] = value
         end
 
-        # TODO: Be sure not only one solution
-        model.status = Trm_DualInfeasible
-        set_solution!(model.solution, 
+
+        # If only a subproblem, either it fits the other constraints, and we are good, or we cannot know in an easy way
+        if infeasible_test
+            constraints_left = setdiff([a for a in 1:constraint_count], constraint_numbers)
+            for j in constraints_left
+                left_hand_side = 0
+                for i in nzrange(At, j)
+                    variable_index = all_rows[i]
+                    left_hand_side += dists[variable_index]*all_values[i]
+                end
+                # If constraint does not hold, we do not know
+                if left_hand_side > b[j]
+                    set_trm_status!(model, Trm_Unknown)
+                    set_sln_status!(model, Sln_Unknown)
+                    return false
+                end
+            end
+        end
+        set_trm_status!(model, Trm_Feasibility)
+        set_solution!(model, 
                     Sln_FeasiblePoint, 
                     dists, 
-                    dot(model.rep.c, dists) + model.rep.obj_constant, 
-                    DifferenceConstraints())
+                    dot(model.rep.c, dists) + model.rep.obj_constant,
+                    difference_constraint)
 
         return true
 
     catch error
         if isa(error, Graphs.NegativeCycleError)
             # Update no feasible solution
-            # TODO: Not sure if dual infeasible or not. Check results?
-            model.status = Trm_PrimalInfeasible
-            set_solution!(model.solution, 
+            set_trm_status!(model, Trm_Infeasibility)
+            set_solution!(model, 
                     Sln_Infeasible, 
                     nothing, 
                     nothing, 
-                    DifferenceConstraints())
+                    difference_constraint)
 
             return true
+        elseif isa(error, CannotKnowError)
+            set_trm_status!(model, Trm_IterationLimit)
+            set_sln_status!(model, Sln_Unknown)
+            return false
         else
-            model.status = Trm_Unknown  
-            model.solution.primal_status = Sln_Unknown  
+            set_trm_status!(model, Trm_Unknown) 
+            set_sln_status!(model, Sln_Unknown)
             throw(error)
             return false
         end
     end
 end
-
-
-
-
