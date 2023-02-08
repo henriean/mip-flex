@@ -319,12 +319,3 @@ line64 = scatter(x=points, y=AgoModel_allocs4, mode="markers", name="AgoModel")
 display(plot([line54, line64]))
 sleep(60)
 
-
-############
-# Code coverage
-using Pkg
-Pkg.test("MipFlex"; coverage=true)
-coverage = process_folder()
-open("lcov.info", "w") do io
-    LCOV.write(io, coverage)
-end
